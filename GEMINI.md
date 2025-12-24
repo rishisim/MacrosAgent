@@ -22,5 +22,7 @@ This file serves as a persistent instruction set for any AI agent working on thi
 - Always check `PROJECT_STATUS.md` before answering "What is the status?" or "What should I work on next?".
 - Use this file to ground your understanding of the architecture (refer to "Key Files").
 
-## 🛠 Maintenance
-- If you notice `PROJECT_STATUS.md` is outdated (e.g., mentions a file that was deleted), fix it immediately.
+## 🖼️ Asset Management
+- **Diagnostic Screenshots**: All screenshots and UI dumps (`.png`, `.xml`) used for debugging or vision analysis MUST be saved in the `debug_screenshots/` directory.
+- **Cleanup**: Delete all diagnostic files from `debug_screenshots/` at the end of a session unless they are explicitly requested for preservation.
+- **Git Hygiene**: Never push diagnostic assets to the remote repository. Ensure `debug_screenshots/` is always in `.gitignore`.
