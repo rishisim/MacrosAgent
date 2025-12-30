@@ -4,10 +4,12 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.content.ComponentName
 import android.text.TextUtils
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,10 +31,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+
 class MainViewModel : ViewModel() {
     private val repository = GeminiRepository()
     
     var capturedBitmap by mutableStateOf<Bitmap?>(null)
+
     var analysisResult by mutableStateOf("")
     var isLoading by mutableStateOf(false)
 
@@ -78,6 +82,10 @@ class MainViewModel : ViewModel() {
 }
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        private const val TAG = "MainActivity"
+    }
+    
     private val viewModel: MainViewModel by viewModels()
 
     private val requestPermissionLauncher =
@@ -137,20 +145,37 @@ class MainActivity : ComponentActivity() {
              return
         }
 
-        // Parse the result to get a friendly food name
+        // Parse the result to get a friendly food name and calories
         val foodName = parseFoodName(viewModel.analysisResult)
+        val calories = parseCalories(viewModel.analysisResult)
         
         // Save to SharedPreferences for the service to pick up
         val prefs = getSharedPreferences("MacrosAgentPrefs", MODE_PRIVATE)
-        prefs.edit().putString("LAST_FOOD_SEARCH", foodName).apply()
+        prefs.edit()
+            .putString("LAST_FOOD_SEARCH", foodName)
+            .putInt("EXPECTED_CALORIES", calories)
+            .apply()
 
-        Toast.makeText(this, "Searching for: $foodName", Toast.LENGTH_SHORT).show()
+        Log.d(TAG, "🚀 Starting MFP automation: $foodName ($calories cal)")
 
-        val launchIntent = packageManager.getLaunchIntentForPackage("com.myfitnesspal.android")
-        if (launchIntent != null) {
-            startActivity(launchIntent)
-        } else {
-            Toast.makeText(this, "MyFitnessPal not installed", Toast.LENGTH_SHORT).show()
+        // 🚀 Try deep link first (skips 3-4 navigation steps!)
+        val deepLink = Intent(Intent.ACTION_VIEW, Uri.parse("myfitnesspal://food/search"))
+        deepLink.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        
+        try {
+            startActivity(deepLink)
+            Toast.makeText(this, "🚀 Searching: $foodName", Toast.LENGTH_SHORT).show()
+            Log.d(TAG, "✓ Deep link launched successfully")
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Deep link failed, falling back to normal launch: ${e.message}")
+            // Fallback to normal launch
+            val launchIntent = packageManager.getLaunchIntentForPackage("com.myfitnesspal.android")
+            if (launchIntent != null) {
+                startActivity(launchIntent)
+                Toast.makeText(this, "Searching: $foodName", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "MyFitnessPal not installed", Toast.LENGTH_SHORT).show()
+            }
         }
     }
     
@@ -165,6 +190,20 @@ class MainActivity : ComponentActivity() {
             }
         } catch (e: Exception) {
             "Food"
+        }
+    }
+    
+    private fun parseCalories(json: String): Int {
+        return try {
+            val jsonObject = org.json.JSONObject(json)
+            val items = jsonObject.getJSONArray("items")
+            if (items.length() > 0) {
+                items.getJSONObject(0).getInt("calories")
+            } else {
+                0
+            }
+        } catch (e: Exception) {
+            0
         }
     }
 

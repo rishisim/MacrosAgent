@@ -24,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+
 /**
  * Cyborg Agent Accessibility Service
  * 
@@ -67,6 +68,7 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private val visionAgent = VisionAgent()
     private val mainHandler = Handler(Looper.getMainLooper())
+
     private val safetyHandler = Handler(Looper.getMainLooper())
     
     // Agent state machine
@@ -100,7 +102,7 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
     private var searchRetryCount = 0                   // How many times we've retried search
     private val MAX_SEARCH_RETRIES = 2
     
-    private val ACTION_COOLDOWN_MS = 500L  // Snappier transitions (was 800ms)
+    private val ACTION_COOLDOWN_MS = 300L  // Fast transitions
     private val MAX_RETRIES = 3
     
     override fun onServiceConnected() {
@@ -125,10 +127,6 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
         // Only process MFP events
         if (currentPackage != "com.myfitnesspal.android") return
         
-        // Cooldown to prevent spamming
-        val now = System.currentTimeMillis()
-        if (now - lastActionTime < ACTION_COOLDOWN_MS) return
-        
         // Check if we have a task
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val foodToSearch = prefs.getString(KEY_SEARCH, null)
@@ -139,6 +137,14 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
             }
             return
         }
+
+        // Cooldown and action progress guards
+        val now = System.currentTimeMillis()
+        if (isActionInProgress || now - lastActionTime < ACTION_COOLDOWN_MS) return
+
+        // Store expected calories for food selection
+        expectedCalories = prefs.getInt("EXPECTED_CALORIES", 0).takeIf { it > 0 }
+        currentFoodSearch = foodToSearch
         
         // Show overlay when active
         if (overlayView == null && !isAgentActive) {
@@ -169,8 +175,15 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
             
             // Priority 2: Handle post-search states (new flow)
             currentState == AgentState.WAITING_FOR_RESULTS -> {
-                // Just wait - the delayed handler will advance to EVALUATING_RESULTS
-                Log.d(TAG, "⏳ Waiting for search results to load...")
+                // Proactive check: if results are already visible in tree, skip wait
+                if (screenState.visibleTexts.any { it.contains(" cal", ignoreCase = true) }) {
+                    Log.d(TAG, "✨ Results detected in accessibility tree, advancing to evaluation")
+                    safetyHandler.removeCallbacksAndMessages(null)
+                    currentState = AgentState.EVALUATING_RESULTS
+                    triggerResultsEvaluation()
+                } else {
+                    Log.d(TAG, "⏳ Waiting for search results to load...")
+                }
             }
             
             currentState == AgentState.EVALUATING_RESULTS -> {
@@ -203,7 +216,16 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
                 }
             }
             
-            // Priority 3: Already at search? Input text!
+            // Priority 3: Deep link success! Already at search screen from IDLE
+            screenType == ScreenType.SEARCH_SCREEN && currentState == AgentState.IDLE -> {
+                Log.d(TAG, "🚀 Deep link success! Skipping navigation, going straight to search input")
+                currentState = AgentState.INPUTTING_TEXT
+                if (screenState.editableFields.isNotEmpty()) {
+                    inputFoodSearch(screenState, foodToSearch, prefs)
+                }
+            }
+            
+            // Priority 4: Already at search with editable field? Input text!
             screenType == ScreenType.SEARCH_SCREEN && screenState.editableFields.isNotEmpty() -> {
                 if (currentState != AgentState.WAITING_FOR_RESULTS && 
                     currentState != AgentState.EVALUATING_RESULTS) {
@@ -212,7 +234,7 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
                 }
             }
             
-            // Priority 4: Navigate based on current state
+            // Priority 5: Navigate based on current state
             else -> navigateToSearch(rootNode, screenState, screenType)
         }
         
@@ -409,8 +431,12 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
             }
             
             AgentState.NAVIGATING_TO_DIARY -> {
-                // Try to find Diary tab (bottom nav)
-                if (clickNodeContaining(root, listOf("Diary", "diary"))) {
+                // Robust fallback chain for Diary tab
+                val diaryTerms = listOf(
+                    "Diary", "diary", "DIARY", 
+                    "Journal", "Food Diary", "My Diary"
+                )
+                if (clickNodeContaining(root, diaryTerms)) {
                     Log.d(TAG, "→ Clicked Diary")
                     currentState = AgentState.FINDING_ADD_FOOD
                     retryCount = 0
@@ -420,8 +446,14 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
             }
             
             AgentState.FINDING_ADD_FOOD -> {
-                // First priority: Look for explicit "Add Food" buttons or "+" icons
-                if (clickNodeContaining(root, listOf("Add Food", "ADD FOOD", "add food"))) {
+                // Robust fallback chain for Add Food buttons
+                val addFoodTerms = listOf(
+                    "Add Food", "ADD FOOD", "add food",
+                    "Add Breakfast", "Add Lunch", "Add Dinner", "Add Snack", "Add Snacks",
+                    "ADD BREAKFAST", "ADD LUNCH", "ADD DINNER", "ADD SNACK",
+                    "Log Food", "LOG FOOD"
+                )
+                if (clickNodeContaining(root, addFoodTerms)) {
                     Log.d(TAG, "→ Clicked Add Food button")
                     currentState = AgentState.FINDING_SEARCH
                     retryCount = 0
@@ -429,11 +461,13 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
                 }
                 
                 // Second priority: Try clicking meal section headers (they expand to show add food)
-                // Only try this on first attempt to avoid clicking the same thing repeatedly
-                if (retryCount == 0 && clickNodeContaining(root, listOf("Breakfast", "Lunch", "Dinner", "Snacks"))) {
-                    Log.d(TAG, "→ Clicked meal section header")
-                    // Don't advance state yet - wait to see if it reveals Add Food
-                    return
+                if (retryCount == 0) {
+                    val mealTerms = listOf("Breakfast", "Lunch", "Dinner", "Snacks", "Snack")
+                    if (clickNodeContaining(root, mealTerms)) {
+                        Log.d(TAG, "→ Clicked meal section header")
+                        // Don't advance state yet - wait to see if it reveals Add Food
+                        return
+                    }
                 }
                 
                 // If first retry fails, try scrolling down (ADD FOOD might be below premium banner)
@@ -447,8 +481,12 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
             }
             
             AgentState.FINDING_SEARCH -> {
-                // Look for search bar
-                if (clickNodeContaining(root, listOf("Search", "search", "magnifying"))) {
+                // Robust fallback chain for search bar
+                val searchTerms = listOf(
+                    "Search for a food", "Search foods", "Search", "search",
+                    "Search for food", "Type to search", "magnifying"
+                )
+                if (clickNodeContaining(root, searchTerms)) {
                     Log.d(TAG, "→ Clicked Search")
                     currentState = AgentState.INPUTTING_TEXT
                     retryCount = 0
@@ -865,6 +903,7 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
                         scope.launch {
                             if (currentState != AgentState.SELECTING_FOOD) {
                                 isActionInProgress = false
+                                screenshot.hardwareBuffer.close()
                                 return@launch
                             }
                             
@@ -877,66 +916,72 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
                             Log.d(TAG, "🎯 Food selection: ${decision.action} - ${decision.foodName} - ${decision.reason}")
                             
                             if (decision.coordinates != null) {
-                                dispatchTapGesture(
-                                    decision.coordinates.first.toFloat(),
-                                    decision.coordinates.second.toFloat()
-                                )
+                                val rootNode = rootInActiveWindow
+                                var clickedSuccessfully = false
                                 
-                                // Set next state based on action
-                                mainHandler.postDelayed({
-                                    val rootNode = rootInActiveWindow
-                                    var clickedSuccessfully = false
+                                // 🌲 FUSION: Try to find by text first in the accessibility tree
+                                if (rootNode != null && decision.foodName != null) {
+                                    Log.d(TAG, "🔍 Fusion: Searching tree for '${decision.foodName}'")
                                     
-                                    // FUSION: Try to find by text first if vision provided a name
-                                    if (rootNode != null && decision.foodName != null) {
-                                        Log.d(TAG, "🔍 Fusion: Searching tree for '${decision.foodName}'")
-                                        
-                                        if (decision.action == "QUICK_ADD") {
-                                            // Special case: find food name, then click (+) button nearby
-                                            clickedSuccessfully = findAndClickNear(rootNode, decision.foodName!!, listOf("+", "add", "Add"))
-                                        } else {
-                                            clickedSuccessfully = clickNodeContaining(rootNode, listOf(decision.foodName!!))
-                                        }
+                                    if (decision.action == "QUICK_ADD") {
+                                        // Special case: find food name, then click (+) button nearby
+                                        clickedSuccessfully = findAndClickNear(rootNode, decision.foodName!!, listOf("+", "add", "Add"))
+                                    } else {
+                                        clickedSuccessfully = clickNodeContaining(rootNode, listOf(decision.foodName!!))
                                     }
+                                }
+                                
+                                // 👁️ FALLBACK: Use rescaled vision coordinates if tree search failed
+                                if (!clickedSuccessfully) {
+                                    Log.d(TAG, "⚠️ Fusion: Tree match failed, using rescaled vision coordinates")
+                                    val scaledCoords = rescaleCoordinates(decision.coordinates!!)
                                     
-                                    if (!clickedSuccessfully && decision.coordinates != null) {
-                                        Log.d(TAG, "⚠️ Fusion: Tree match failed, falling back to rescaled vision coordinates")
-                                        val scaledCoords = rescaleCoordinates(decision.coordinates!!)
-                                        dispatchTapGesture(scaledCoords.first, scaledCoords.second)
-                                    } else if (!clickedSuccessfully) {
-                                        Log.e(TAG, "❌ Fusion: Both tree search and vision coordinates failed")
-                                    }
-
+                                    // Set next state IMMEDIATELY before tap to prevent OODA loop re-entry
                                     when (decision.action) {
                                         "QUICK_ADD" -> {
-                                            // Quick add clicked, wait for verification
                                             currentState = AgentState.VERIFYING_ACTION
                                             verificationStartTime = System.currentTimeMillis()
-                                            Log.d(TAG, "⏳ Waiting for 'Food added' confirmation...")
                                         }
                                         "VIEW_DETAILS" -> {
-                                            // Going to serving size screen
-                                            isActionInProgress = false
                                             currentState = AgentState.ADJUSTING_SERVING
-                                            triggerServingAdjustment()
                                         }
                                     }
-                                }, 600) // Reduced from 1000ms
+                                    
+                                    dispatchTapGesture(scaledCoords.first, scaledCoords.second)
+                                } else {
+                                    // Already clicked via tree, just advance state
+                                    when (decision.action) {
+                                        "QUICK_ADD" -> {
+                                            currentState = AgentState.VERIFYING_ACTION
+                                            verificationStartTime = System.currentTimeMillis()
+                                        }
+                                        "VIEW_DETAILS" -> {
+                                            currentState = AgentState.ADJUSTING_SERVING
+                                        }
+                                    }
+                                }
+
+                                Log.d(TAG, "📍 State advanced to: $currentState")
+                                
+                                // Keep isActionInProgress = true for a delay to let UI settle
+                                mainHandler.postDelayed({
+                                    isActionInProgress = false
+                                }, 800)
                             } else {
                                 Log.e(TAG, "❌ No coordinates returned for food selection")
                                 retryCount++
                                 if (retryCount >= MAX_RETRIES) {
                                     completeTask()  // Give up gracefully
                                 }
+                                isActionInProgress = false
                             }
-                            isActionInProgress = false
                         }
                     } else {
                         isActionInProgress = false
                     }
                     screenshot.hardwareBuffer.close()
                 }
-                
+
                 override fun onFailure(errorCode: Int) {
                     Log.e(TAG, "Screenshot failed for food selection: $errorCode")
                     isActionInProgress = false
@@ -967,6 +1012,7 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
                         scope.launch {
                             if (currentState != AgentState.ADJUSTING_SERVING) {
                                 isActionInProgress = false
+                                screenshot.hardwareBuffer.close()
                                 return@launch
                             }
                             
@@ -980,29 +1026,33 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
                             
                             if (decision.coordinates != null) {
                                 val scaledCoords = rescaleCoordinates(decision.coordinates!!)
+                                
+                                // Advance state before tap
+                                when (decision.action) {
+                                    "CONFIRM" -> {
+                                        // Next state is completion, but we'll call completeTask() after delay
+                                    }
+                                    "ADJUST_SERVINGS", "CHANGE_UNIT" -> {
+                                        currentState = AgentState.CONFIRMING_ADD
+                                    }
+                                }
+                                
                                 dispatchTapGesture(scaledCoords.first, scaledCoords.second)
                                 
                                 mainHandler.postDelayed({
-                                    when (decision.action) {
-                                        "CONFIRM" -> {
-                                            // Food has been added!
-                                            completeTask()
-                                        }
-                                        "ADJUST_SERVINGS", "CHANGE_UNIT" -> {
-                                            // User needs to adjust - for now we'll just confirm
-                                            // Future: Could input the new_value
-                                            currentState = AgentState.CONFIRMING_ADD
-                                        }
+                                    if (decision.action == "CONFIRM") {
+                                        completeTask()
                                     }
-                                }, 800) // Reduced from 1500ms
+                                    isActionInProgress = false
+                                }, 1000)
                             } else {
                                 // Try to find confirm button in tree
                                 val rootNode = rootInActiveWindow
-                                if (rootNode != null && clickNodeContaining(rootNode, listOf("✓", "check", "save"))) {
+                                if (rootNode != null && clickNodeContaining(rootNode, listOf("✓", "check", "save", "add"))) {
                                     completeTask()
                                 }
+                                isActionInProgress = false
                             }
-                            isActionInProgress = false
                         }
                     } else {
                         isActionInProgress = false

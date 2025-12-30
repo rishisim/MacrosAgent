@@ -5,13 +5,11 @@ import com.google.ai.client.generativeai.GenerativeModel
 import com.example.mediapipe.examples.macrosagent.BuildConfig
 
 class GeminiRepository {
-    // TODO: Secure this key! Ideally use BuildConfig via local.properties
-    // For now, placing a placeholder. User mentioned they have a key.
     private val apiKey = BuildConfig.GEMINI_API_KEY 
     
     private val generativeModel by lazy {
         GenerativeModel(
-            modelName = "gemini-2.5-flash", // Latest fast model
+            modelName = "gemini-2.5-flash",
             apiKey = apiKey
         )
     }
