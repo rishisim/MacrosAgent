@@ -99,10 +99,15 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
     // Food selection tracking
     private var currentFoodSearch: String? = null      // What we're searching for
     private var expectedCalories: Int? = null          // From Gemini analysis
-    private var searchRetryCount = 0                   // How many times we've retried search
-    private val MAX_SEARCH_RETRIES = 2
+    private var expectedProtein: Int? = null           // [NEW]
+    private var expectedCarbs: Int? = null             // [NEW]
+    private var expectedFat: Int? = null               // [NEW]
+    private var targetMeal: String? = null             // [NEW] Target meal (Breakfast/Lunch/Dinner)
     
-    private val ACTION_COOLDOWN_MS = 300L  // Fast transitions
+    private var searchRetryCount = 0                   // [RESTORED]
+    private val MAX_SEARCH_RETRIES = 2                 // [RESTORED]
+    
+    private val ACTION_COOLDOWN_MS = 1500L  // [CHANGED] Increased for robustness (was 300ms)
     private val MAX_RETRIES = 3
     
     override fun onServiceConnected() {
@@ -144,7 +149,14 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
 
         // Store expected calories for food selection
         expectedCalories = prefs.getInt("EXPECTED_CALORIES", 0).takeIf { it > 0 }
+        expectedProtein = prefs.getInt("EXPECTED_PROTEIN", 0).takeIf { it > 0 }
+        expectedCarbs = prefs.getInt("EXPECTED_CARBS", 0).takeIf { it > 0 }
+        expectedFat = prefs.getInt("EXPECTED_FAT", 0).takeIf { it > 0 }
+        
         currentFoodSearch = foodToSearch
+        
+        // [NEW] Read Target Meal (Breakfast, Lunch, Dinner, Snacks)
+        targetMeal = prefs.getString("TARGET_MEAL", "Breakfast")
         
         // Show overlay when active
         if (overlayView == null && !isAgentActive) {
@@ -447,6 +459,18 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
             
             AgentState.FINDING_ADD_FOOD -> {
                 // Robust fallback chain for Add Food buttons
+                // [NEW] Prioritize the specific target meal button if we know it
+                if (targetMeal != null) {
+                    val targetMealTerms = listOf("Add $targetMeal", "ADD ${targetMeal?.uppercase()}")
+                    if (clickNodeContaining(root, targetMealTerms)) {
+                        Log.d(TAG, "🎯 Clicked specific target: Add $targetMeal")
+                        currentState = AgentState.FINDING_SEARCH
+                        retryCount = 0
+                        return
+                    }
+                }
+                
+                // Fallback to generic if specific fails
                 val addFoodTerms = listOf(
                     "Add Food", "ADD FOOD", "add food",
                     "Add Breakfast", "Add Lunch", "Add Dinner", "Add Snack", "Add Snacks",
@@ -454,7 +478,7 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
                     "Log Food", "LOG FOOD"
                 )
                 if (clickNodeContaining(root, addFoodTerms)) {
-                    Log.d(TAG, "→ Clicked Add Food button")
+                    Log.d(TAG, "→ Clicked generic Add Food button") // Downgraded to generic log
                     currentState = AgentState.FINDING_SEARCH
                     retryCount = 0
                     return
@@ -863,6 +887,14 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
             return
         }
         
+        // [NEW] Check if we returned to Diary (Backup verification)
+        if (state.visibleTexts.any { it.equals("Diary", ignoreCase = true) } &&
+            state.visibleTexts.any { it.contains("Goal", ignoreCase = true) }) {
+             Log.d(TAG, "✓ Verification successful: Returned to Diary")
+             completeTask()
+             return
+        }
+        
         // Check timeout (give it 4 seconds to appear)
         if (System.currentTimeMillis() - verificationStartTime > 4000) {
             Log.w(TAG, "⚠️ Verification failed: No confirmation text found after 4s")
@@ -910,7 +942,10 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
                             val decision = visionAgent.selectBestFood(
                                 bitmap,
                                 currentFoodSearch ?: "",
-                                expectedCalories
+                                expectedCalories,
+                                expectedProtein,
+                                expectedCarbs,
+                                expectedFat
                             )
                             
                             Log.d(TAG, "🎯 Food selection: ${decision.action} - ${decision.foodName} - ${decision.reason}")
@@ -1019,7 +1054,10 @@ class MyFitnessPalAccessibilityService : AccessibilityService() {
                             val decision = visionAgent.analyzeServingScreen(
                                 bitmap,
                                 currentFoodSearch ?: "",
-                                expectedCalories
+                                expectedCalories,
+                                expectedProtein,
+                                expectedCarbs,
+                                expectedFat
                             )
                             
                             Log.d(TAG, "⚖️ Serving decision: ${decision.action} - ${decision.reason}")

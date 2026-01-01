@@ -10,6 +10,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,16 +96,52 @@ fun AnalysisScreen(
     bitmap: Bitmap?,
     analysisResult: String,
     onRetake: () -> Unit,
-    onAddToMFP: () -> Unit
+    onAddToMFP: (String) -> Unit // Now accepts target meal
 ) {
     val analysis = remember(analysisResult) { 
         if (analysisResult.isBlank()) null else parseAnalysisResult(analysisResult) 
     }
     
+    var showMealDialog by remember { mutableStateOf(false) }
+    
     val gradientColors = listOf(
         Color(0xFF0F0F0F),
         Color(0xFF1A1A2E)
     )
+    
+    if (showMealDialog) {
+        AlertDialog(
+            onDismissRequest = { showMealDialog = false },
+            containerColor = Color(0xFF1E1E2D),
+            title = { Text("Select Meal", color = Color.White) },
+            text = {
+                Column {
+                    listOf("Breakfast", "Lunch", "Dinner", "Snacks").forEach { meal ->
+                        TextButton(
+                            onClick = { 
+                                showMealDialog = false
+                                onAddToMFP(meal) 
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF4CAF50))
+                        ) {
+                            Text(
+                                text = meal,
+                                fontSize = 18.sp,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showMealDialog = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+        )
+    }
     
     Column(
         modifier = Modifier
@@ -139,7 +179,7 @@ fun AnalysisScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(Color.DarkGray),
-                    contentAlignment = Alignment.Center
+                        contentAlignment = Alignment.Center
                 ) {
                     Text("No Image Captured", color = Color.White)
                 }
@@ -298,7 +338,7 @@ fun AnalysisScreen(
             }
 
             Button(
-                onClick = onAddToMFP,
+                onClick = { showMealDialog = true },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                 shape = RoundedCornerShape(12.dp)

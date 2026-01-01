@@ -1,13 +1,12 @@
 package com.example.mediapipe.examples.macrosagent
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
-import android.content.ComponentName
 import android.text.TextUtils
 import android.util.Log
 import android.widget.Toast
@@ -15,78 +14,29 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.mediapipe.examples.macrosagent.data.GeminiRepository
+import com.example.mediapipe.examples.macrosagent.domain.FoodParser
 import com.example.mediapipe.examples.macrosagent.service.MyFitnessPalAccessibilityService
 import com.example.mediapipe.examples.macrosagent.ui.AnalysisScreen
 import com.example.mediapipe.examples.macrosagent.ui.CameraScreen
+import com.example.mediapipe.examples.macrosagent.ui.MainViewModel
 import com.example.mediapipe.examples.macrosagent.ui.theme.MacrosAgentTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
-
-class MainViewModel : ViewModel() {
-    private val repository = GeminiRepository()
-    
-    var capturedBitmap by mutableStateOf<Bitmap?>(null)
-
-    var analysisResult by mutableStateOf("")
-    var isLoading by mutableStateOf(false)
-
-    fun analyze(bitmap: Bitmap) {
-        capturedBitmap = bitmap
-        isLoading = true
-        viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                repository.analyzeImage(bitmap)
-            }
-            analysisResult = result
-            isLoading = false
-        }
-    }
-
-    fun loadMockData() {
-        // Create a black placeholder bitmap
-        capturedBitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
-        
-        // Mock analysis result
-        analysisResult = """
-            {
-                "items": [
-                    {
-                        "name": "Clementine (Peeled)",
-                        "calories": 35,
-                        "protein_g": 1,
-                        "carbs_g": 9,
-                        "fat_g": 0
-                    }
-                ],
-                "total": {
-                    "calories": 35,
-                    "protein_g": 1,
-                    "carbs_g": 9,
-                    "fat_g": 0
-                },
-                "summary": "Detected a peeled clementine (~74g). A healthy snack!"
-            }
-        """.trimIndent()
-        isLoading = false
-    }
-}
-
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     companion object {
         private const val TAG = "MainActivity"
     }
     
     private val viewModel: MainViewModel by viewModels()
+    
+    @Inject
+    lateinit var foodParser: FoodParser
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted: Boolean ->
@@ -125,10 +75,10 @@ class MainActivity : ComponentActivity() {
                             analysisResult = viewModel.analysisResult,
                             onRetake = {
                                 navController.popBackStack()
-                                viewModel.analysisResult = ""
+                                viewModel.clearAnalysis()
                             },
-                            onAddToMFP = {
-                                startMFPAutomation()
+                            onAddToMFP = { targetMeal ->
+                                startMFPAutomation(targetMeal)
                             }
                         )
                     }
@@ -137,7 +87,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startMFPAutomation() {
+    private fun startMFPAutomation(targetMeal: String) {
         if (!isAccessibilityServiceEnabled()) {
              Toast.makeText(this, "Please enable MacrosAgent Accessibility Service", Toast.LENGTH_LONG).show()
              val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
@@ -145,18 +95,25 @@ class MainActivity : ComponentActivity() {
              return
         }
 
-        // Parse the result to get a friendly food name and calories
-        val foodName = parseFoodName(viewModel.analysisResult)
-        val calories = parseCalories(viewModel.analysisResult)
+        // Parse the result using injected FoodParser
+        val foodName = foodParser.parseFoodName(viewModel.analysisResult)
+        val calories = foodParser.parseCalories(viewModel.analysisResult)
+        val protein = foodParser.parseProtein(viewModel.analysisResult)
+        val carbs = foodParser.parseCarbs(viewModel.analysisResult)
+        val fat = foodParser.parseFat(viewModel.analysisResult)
         
         // Save to SharedPreferences for the service to pick up
         val prefs = getSharedPreferences("MacrosAgentPrefs", MODE_PRIVATE)
         prefs.edit()
             .putString("LAST_FOOD_SEARCH", foodName)
             .putInt("EXPECTED_CALORIES", calories)
+            .putInt("EXPECTED_PROTEIN", protein)
+            .putInt("EXPECTED_CARBS", carbs)
+            .putInt("EXPECTED_FAT", fat)
+            .putString("TARGET_MEAL", targetMeal)
             .apply()
 
-        Log.d(TAG, "🚀 Starting MFP automation: $foodName ($calories cal)")
+        Log.d(TAG, "🚀 Starting MFP automation: $foodName ($calories cal) for $targetMeal")
 
         // 🚀 Try deep link first (skips 3-4 navigation steps!)
         val deepLink = Intent(Intent.ACTION_VIEW, Uri.parse("myfitnesspal://food/search"))
@@ -176,34 +133,6 @@ class MainActivity : ComponentActivity() {
             } else {
                 Toast.makeText(this, "MyFitnessPal not installed", Toast.LENGTH_SHORT).show()
             }
-        }
-    }
-    
-    private fun parseFoodName(json: String): String {
-        return try {
-            val jsonObject = org.json.JSONObject(json)
-            val items = jsonObject.getJSONArray("items")
-            if (items.length() > 0) {
-                items.getJSONObject(0).getString("name")
-            } else {
-                "Food"
-            }
-        } catch (e: Exception) {
-            "Food"
-        }
-    }
-    
-    private fun parseCalories(json: String): Int {
-        return try {
-            val jsonObject = org.json.JSONObject(json)
-            val items = jsonObject.getJSONArray("items")
-            if (items.length() > 0) {
-                items.getJSONObject(0).getInt("calories")
-            } else {
-                0
-            }
-        } catch (e: Exception) {
-            0
         }
     }
 

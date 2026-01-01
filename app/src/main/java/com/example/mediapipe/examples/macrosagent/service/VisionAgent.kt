@@ -247,11 +247,14 @@ class VisionAgent {
     suspend fun selectBestFood(
         screenshot: Bitmap,
         targetFood: String,
-        expectedCalories: Int? = null
+        expectedCalories: Int? = null,
+        expectedProtein: Int? = null,
+        expectedCarbs: Int? = null,
+        expectedFat: Int? = null
     ): FoodSelectionDecision = withContext(Dispatchers.IO) {
         try {
             val calorieHint = if (expectedCalories != null) {
-                "Expected calories: ~$expectedCalories cal. Choose a portion that matches."
+                "Target: ~$expectedCalories cal, ${expectedProtein}g Protein, ${expectedCarbs}g Carbs, ${expectedFat}g Fat."
             } else ""
             
             val prompt = """
@@ -259,7 +262,12 @@ class VisionAgent {
                 Looking for: "$targetFood"
                 $calorieHint
                 
-                TASK: Find the BEST matching food item on screen.
+                TASK: Find the BEST matching food item on screen based on name AND macros.
+                
+                CRITERIA:
+                1. Name Match: Must be similar to "$targetFood".
+                2. Macro Match: Prioritize items that match the Protein/Carb/Fat targets if provided.
+                   - Example: If target is "Chicken Breast (30g Protein)", pick the entry with ~30g protein, not the one with 10g.
                 
                 DECIDE:
                 - QUICK_ADD: The serving size/quantity looks exactly right, click the PLUS (+) button directly. Only use this if you see a "+" button next to the food.
@@ -269,7 +277,7 @@ class VisionAgent {
                 1. Return the CENTER coordinates of the element you want to click.
                 2. Use NORMALIZED COORDINATES (0-1000).
                 3. Return ONLY valid JSON in this format:
-                   {"action": "QUICK_ADD", "x": 920, "y": 450, "food_name": "Peeled Clementines", "reason": "Found exact match with + button"}
+                   {"action": "QUICK_ADD", "x": 920, "y": 450, "food_name": "Peeled Clementines", "reason": "Found exact match with + button and correct macros"}
             """.trimIndent()
             
             val response = generativeModel.generateContent(
@@ -332,11 +340,14 @@ class VisionAgent {
     suspend fun analyzeServingScreen(
         screenshot: Bitmap,
         targetFood: String,
-        expectedCalories: Int? = null
+        expectedCalories: Int? = null,
+        expectedProtein: Int? = null,
+        expectedCarbs: Int? = null,
+        expectedFat: Int? = null
     ): ServingDecision = withContext(Dispatchers.IO) {
         try {
             val calorieHint = if (expectedCalories != null) {
-                "Target calories: ~$expectedCalories cal. Adjust serving to match."
+                "Target: ~$expectedCalories cal (P:$expectedProtein C:$expectedCarbs F:$expectedFat). Adjust serving to match."
             } else "Just confirm with current serving size."
             
             val prompt = """
