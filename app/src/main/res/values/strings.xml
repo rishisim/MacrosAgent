@@ -1,4 +1,0 @@
-<resources>
-    <string name="app_name">MacrosAgent</string>
-    <string name="accessibility_service_description">MacrosAgent requires this service to automate adding food entries to MyFitnessPal.</string>
-</resources>
