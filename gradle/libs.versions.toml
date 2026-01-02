@@ -13,11 +13,12 @@ ksp = "2.0.21-1.0.28"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
 coil = "2.7.0"
-generativeAi = "0.9.0"
+generativeAiVersion = "1.32.0"
 mlkitBarcodeScanning = "17.3.0"
 cameraX = "1.4.1"
 datastore = "1.1.1"
 coroutines = "1.9.0"
+vicoVersion = "1.15.0"
 
 [libraries]
 # Core Android
@@ -59,8 +60,8 @@ okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-i
 # Image Loading
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
-# Gemini AI
-generative-ai = { group = "com.google.ai.client.generativeai", name = "generativeai", version.ref = "generativeAi" }
+# Gemini AI (New google-genai SDK)
+google-genai = { group = "com.google.genai", name = "google-genai", version.ref = "generativeAiVersion" }
 
 # ML Kit Barcode Scanning
 mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcodeScanning" }
@@ -77,11 +78,20 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 
 # Coroutines
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
 
 # Testing
 junit = { group = "junit", name = "junit", version = "4.13.2" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version = "1.2.1" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version = "3.6.1" }
+
+# Google Fit
+play-services-fitness = { group = "com.google.android.gms", name = "play-services-fitness", version = "21.2.0" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version = "21.2.0" }
+
+# Vico Charts
+vico-compose = { group = "com.patrykandpatrick.vico", name = "compose", version.ref = "vicoVersion" }
+vico-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vicoVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

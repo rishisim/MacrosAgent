@@ -8,11 +8,8 @@ import com.macros.agent.data.local.dao.ExerciseDao
 import com.macros.agent.data.local.dao.FoodDao
 import com.macros.agent.data.local.dao.GeminiAnalysisDao
 import com.macros.agent.data.local.dao.GoalsDao
-import com.macros.agent.data.local.entity.DiaryEntry
-import com.macros.agent.data.local.entity.ExerciseEntry
-import com.macros.agent.data.local.entity.Food
-import com.macros.agent.data.local.entity.GeminiAnalysis
-import com.macros.agent.data.local.entity.UserGoals
+import com.macros.agent.data.local.dao.UserMealDao
+import com.macros.agent.data.local.entity.*
 
 @Database(
     entities = [
@@ -20,10 +17,12 @@ import com.macros.agent.data.local.entity.UserGoals
         DiaryEntry::class,
         GeminiAnalysis::class,
         UserGoals::class,
-        ExerciseEntry::class
+        ExerciseEntry::class,
+        UserMeal::class,
+        UserMealItem::class
     ],
-    version = 1,
-    exportSchema = true
+    version = 2,
+    exportSchema = false
 )
 @TypeConverters(Converters::class)
 abstract class MacrosDatabase : RoomDatabase() {
@@ -32,6 +31,7 @@ abstract class MacrosDatabase : RoomDatabase() {
     abstract fun goalsDao(): GoalsDao
     abstract fun exerciseDao(): ExerciseDao
     abstract fun geminiAnalysisDao(): GeminiAnalysisDao
+    abstract fun userMealDao(): UserMealDao
     
     companion object {
         const val DATABASE_NAME = "macros_database"

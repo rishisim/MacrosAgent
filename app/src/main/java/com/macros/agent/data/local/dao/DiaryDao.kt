@@ -20,6 +20,11 @@ data class DailyTotals(
     val totalFat: Float
 )
 
+data class DateCalorie(
+    val date: String,
+    val totalCalories: Float
+)
+
 @Dao
 interface DiaryDao {
     
@@ -77,4 +82,13 @@ interface DiaryDao {
     
     @Query("DELETE FROM diary_entries WHERE date = :date")
     suspend fun deleteAllForDate(date: String)
+
+    @Query("""
+        SELECT date, SUM(calories) as totalCalories
+        FROM diary_entries 
+        WHERE date BETWEEN :startDate AND :endDate
+        GROUP BY date
+        ORDER BY date ASC
+    """)
+    fun getCalorieHistory(startDate: String, endDate: String): Flow<List<DateCalorie>>
 }

@@ -845,6 +845,51 @@ public final class DiaryDao_Impl implements DiaryDao {
     });
   }
 
+  @Override
+  public Flow<List<DateCalorie>> getCalorieHistory(final String startDate, final String endDate) {
+    final String _sql = "\n"
+            + "        SELECT date, SUM(calories) as totalCalories\n"
+            + "        FROM diary_entries \n"
+            + "        WHERE date BETWEEN ? AND ?\n"
+            + "        GROUP BY date\n"
+            + "        ORDER BY date ASC\n"
+            + "    ";
+    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 2);
+    int _argIndex = 1;
+    _statement.bindString(_argIndex, startDate);
+    _argIndex = 2;
+    _statement.bindString(_argIndex, endDate);
+    return CoroutinesRoom.createFlow(__db, false, new String[] {"diary_entries"}, new Callable<List<DateCalorie>>() {
+      @Override
+      @NonNull
+      public List<DateCalorie> call() throws Exception {
+        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
+        try {
+          final int _cursorIndexOfDate = 0;
+          final int _cursorIndexOfTotalCalories = 1;
+          final List<DateCalorie> _result = new ArrayList<DateCalorie>(_cursor.getCount());
+          while (_cursor.moveToNext()) {
+            final DateCalorie _item;
+            final String _tmpDate;
+            _tmpDate = _cursor.getString(_cursorIndexOfDate);
+            final float _tmpTotalCalories;
+            _tmpTotalCalories = _cursor.getFloat(_cursorIndexOfTotalCalories);
+            _item = new DateCalorie(_tmpDate,_tmpTotalCalories);
+            _result.add(_item);
+          }
+          return _result;
+        } finally {
+          _cursor.close();
+        }
+      }
+
+      @Override
+      protected void finalize() {
+        _statement.release();
+      }
+    });
+  }
+
   @NonNull
   public static List<Class<?>> getRequiredConverters() {
     return Collections.emptyList();

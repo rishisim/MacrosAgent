@@ -17,10 +17,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.macros.agent.data.local.entity.MealType
 import com.macros.agent.ui.screens.diary.DiaryScreen
+import com.macros.agent.ui.screens.diary.DiaryViewModel
 import com.macros.agent.ui.screens.exercise.ExerciseScreen
 import com.macros.agent.ui.screens.photo.PhotoScreen
 import com.macros.agent.ui.screens.search.SearchScreen
+import com.macros.agent.ui.screens.search.SearchViewModel
+import com.macros.agent.ui.screens.search.BarcodeScannerScreen
+import com.macros.agent.ui.screens.diary.ProgressChartScreen
+import com.macros.agent.ui.screens.settings.GoalsScreen
 import com.macros.agent.ui.screens.settings.SettingsScreen
 
 @Composable
@@ -97,21 +104,41 @@ fun MacrosNavHost() {
                     onNavigateToSearch = { mealType ->
                         navController.navigate(Routes.addFood(mealType))
                     },
+                    onNavigateToEdit = { entryId ->
+                        navController.navigate(Routes.editEntry(entryId))
+                    },
                     onNavigateToPhoto = {
                         navController.navigate(Screen.Photo.route)
+                    },
+                    onNavigateToExercise = {
+                        navController.navigate(Screen.Exercise.route)
+                    },
+                    onNavigateToProgress = {
+                        navController.navigate(Routes.PROGRESS_CHART)
                     }
                 )
             }
             
-            composable(Screen.Search.route) {
+            composable(Screen.Search.route) { backStackEntry ->
+                val viewModel = hiltViewModel<SearchViewModel>()
+                
+                val scannedBarcode = backStackEntry.savedStateHandle.get<String>("scanned_barcode")
+                androidx.compose.runtime.LaunchedEffect(scannedBarcode) {
+                    if (scannedBarcode != null) {
+                        viewModel.searchByBarcode(scannedBarcode)
+                        backStackEntry.savedStateHandle.remove<String>("scanned_barcode")
+                    }
+                }
+                
                 SearchScreen(
                     onFoodSelected = { food ->
-                        // Navigate back to diary with selected food
-                        navController.popBackStack()
+                        navController.navigate(Routes.foodDetail(food.fdcId, null))
                     },
                     onNavigateToBarcode = {
                         navController.navigate(Routes.BARCODE_SCANNER)
-                    }
+                    },
+                    mealType = MealType.LUNCH,
+                    viewModel = viewModel
                 )
             }
             
@@ -127,7 +154,9 @@ fun MacrosNavHost() {
             }
             
             composable(Screen.Exercise.route) {
-                ExerciseScreen()
+                ExerciseScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
             
             composable(Screen.Settings.route) {
@@ -135,6 +164,99 @@ fun MacrosNavHost() {
                     onNavigateToGoals = {
                         navController.navigate(Routes.GOALS)
                     }
+                )
+            }
+            
+            composable(Routes.GOALS) {
+                GoalsScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+            
+
+
+            composable(
+                route = Routes.ADD_FOOD,
+                arguments = listOf(
+                    androidx.navigation.navArgument("mealType") { 
+                        type = androidx.navigation.NavType.StringType 
+                        nullable = true
+                    }
+                )
+            ) { backStackEntry ->
+                val viewModel = hiltViewModel<SearchViewModel>()
+                val mealType = backStackEntry.arguments?.getString("mealType")
+                
+                val scannedBarcode = backStackEntry.savedStateHandle.get<String>("scanned_barcode")
+                androidx.compose.runtime.LaunchedEffect(scannedBarcode) {
+                    if (scannedBarcode != null) {
+                        viewModel.searchByBarcode(scannedBarcode)
+                        backStackEntry.savedStateHandle.remove<String>("scanned_barcode")
+                    }
+                }
+                
+                SearchScreen(
+                    onFoodSelected = { food ->
+                        navController.navigate(Routes.foodDetail(food.fdcId, mealType))
+                    },
+                    onNavigateToBarcode = {
+                        navController.navigate(Routes.BARCODE_SCANNER)
+                    },
+                    mealType = mealType?.let { MealType.valueOf(it) } ?: MealType.LUNCH,
+                    viewModel = viewModel
+                )
+            }
+
+            composable(
+                route = Routes.FOOD_DETAIL,
+                arguments = listOf(
+                    androidx.navigation.navArgument("fdcId") { type = androidx.navigation.NavType.IntType },
+                    androidx.navigation.navArgument("mealType") { 
+                        type = androidx.navigation.NavType.StringType
+                        nullable = true
+                    }
+                )
+            ) {
+                com.macros.agent.ui.screens.food.FoodDetailScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable(
+                route = Routes.EDIT_ENTRY,
+                arguments = listOf(
+                    androidx.navigation.navArgument("entryId") { type = androidx.navigation.NavType.LongType }
+                )
+            ) {
+                com.macros.agent.ui.screens.food.FoodDetailScreen(
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+            
+            composable(Routes.BARCODE_SCANNER) {
+                BarcodeScannerScreen(
+                    onBarcodeScanned = { barcode ->
+                        // Pass result back to search screen
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("scanned_barcode", barcode)
+                        navController.popBackStack()
+                    },
+                    onNavigateBack = {
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            composable(Routes.PROGRESS_CHART) {
+                ProgressChartScreen(
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
         }

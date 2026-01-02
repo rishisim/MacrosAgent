@@ -6,6 +6,65 @@ import android.view.View;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.SavedStateHandle;
 import androidx.lifecycle.ViewModel;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import com.macros.agent.data.local.MacrosDatabase;
+import com.macros.agent.data.local.dao.DiaryDao;
+import com.macros.agent.data.local.dao.ExerciseDao;
+import com.macros.agent.data.local.dao.FoodDao;
+import com.macros.agent.data.local.dao.GeminiAnalysisDao;
+import com.macros.agent.data.local.dao.GoalsDao;
+import com.macros.agent.data.local.dao.UserMealDao;
+import com.macros.agent.data.remote.api.GeminiService;
+import com.macros.agent.data.remote.api.GoogleFitService;
+import com.macros.agent.data.remote.api.UsdaApiService;
+import com.macros.agent.data.repository.DiaryRepository;
+import com.macros.agent.data.repository.ExerciseRepository;
+import com.macros.agent.data.repository.ExerciseRepository_Factory;
+import com.macros.agent.data.repository.ExerciseRepository_MembersInjector;
+import com.macros.agent.data.repository.FoodRepository;
+import com.macros.agent.data.repository.GoalsRepository;
+import com.macros.agent.data.repository.UserMealRepository;
+import com.macros.agent.di.DatabaseModule_ProvideDatabaseFactory;
+import com.macros.agent.di.DatabaseModule_ProvideDiaryDaoFactory;
+import com.macros.agent.di.DatabaseModule_ProvideExerciseDaoFactory;
+import com.macros.agent.di.DatabaseModule_ProvideFoodDaoFactory;
+import com.macros.agent.di.DatabaseModule_ProvideGeminiAnalysisDaoFactory;
+import com.macros.agent.di.DatabaseModule_ProvideGoalsDaoFactory;
+import com.macros.agent.di.DatabaseModule_ProvideUserMealDaoFactory;
+import com.macros.agent.di.NetworkModule_ProvideOkHttpClientFactory;
+import com.macros.agent.di.NetworkModule_ProvideUsdaApiKeyFactory;
+import com.macros.agent.di.NetworkModule_ProvideUsdaApiServiceFactory;
+import com.macros.agent.di.NetworkModule_ProvideUsdaRetrofitFactory;
+import com.macros.agent.ui.screens.diary.DiaryViewModel;
+import com.macros.agent.ui.screens.diary.DiaryViewModel_HiltModules;
+import com.macros.agent.ui.screens.diary.DiaryViewModel_HiltModules_BindsModule_Binds_LazyMapKey;
+import com.macros.agent.ui.screens.diary.DiaryViewModel_HiltModules_KeyModule_Provide_LazyMapKey;
+import com.macros.agent.ui.screens.diary.ProgressChartViewModel;
+import com.macros.agent.ui.screens.diary.ProgressChartViewModel_HiltModules;
+import com.macros.agent.ui.screens.diary.ProgressChartViewModel_HiltModules_BindsModule_Binds_LazyMapKey;
+import com.macros.agent.ui.screens.diary.ProgressChartViewModel_HiltModules_KeyModule_Provide_LazyMapKey;
+import com.macros.agent.ui.screens.exercise.ExerciseViewModel;
+import com.macros.agent.ui.screens.exercise.ExerciseViewModel_HiltModules;
+import com.macros.agent.ui.screens.exercise.ExerciseViewModel_HiltModules_BindsModule_Binds_LazyMapKey;
+import com.macros.agent.ui.screens.exercise.ExerciseViewModel_HiltModules_KeyModule_Provide_LazyMapKey;
+import com.macros.agent.ui.screens.food.FoodDetailViewModel;
+import com.macros.agent.ui.screens.food.FoodDetailViewModel_HiltModules;
+import com.macros.agent.ui.screens.food.FoodDetailViewModel_HiltModules_BindsModule_Binds_LazyMapKey;
+import com.macros.agent.ui.screens.food.FoodDetailViewModel_HiltModules_KeyModule_Provide_LazyMapKey;
+import com.macros.agent.ui.screens.photo.PhotoViewModel;
+import com.macros.agent.ui.screens.photo.PhotoViewModel_HiltModules;
+import com.macros.agent.ui.screens.photo.PhotoViewModel_HiltModules_BindsModule_Binds_LazyMapKey;
+import com.macros.agent.ui.screens.photo.PhotoViewModel_HiltModules_KeyModule_Provide_LazyMapKey;
+import com.macros.agent.ui.screens.search.SearchViewModel;
+import com.macros.agent.ui.screens.search.SearchViewModel_HiltModules;
+import com.macros.agent.ui.screens.search.SearchViewModel_HiltModules_BindsModule_Binds_LazyMapKey;
+import com.macros.agent.ui.screens.search.SearchViewModel_HiltModules_KeyModule_Provide_LazyMapKey;
+import com.macros.agent.ui.screens.settings.GoalsViewModel;
+import com.macros.agent.ui.screens.settings.GoalsViewModel_HiltModules;
+import com.macros.agent.ui.screens.settings.GoalsViewModel_HiltModules_BindsModule_Binds_LazyMapKey;
+import com.macros.agent.ui.screens.settings.GoalsViewModel_HiltModules_KeyModule_Provide_LazyMapKey;
 import dagger.hilt.android.ActivityRetainedLifecycle;
 import dagger.hilt.android.ViewModelLifecycle;
 import dagger.hilt.android.internal.builders.ActivityComponentBuilder;
@@ -20,14 +79,17 @@ import dagger.hilt.android.internal.lifecycle.DefaultViewModelFactories_Internal
 import dagger.hilt.android.internal.managers.ActivityRetainedComponentManager_LifecycleModule_ProvideActivityRetainedLifecycleFactory;
 import dagger.hilt.android.internal.managers.SavedStateHandleHolder;
 import dagger.hilt.android.internal.modules.ApplicationContextModule;
+import dagger.hilt.android.internal.modules.ApplicationContextModule_ProvideContextFactory;
 import dagger.internal.DaggerGenerated;
 import dagger.internal.DoubleCheck;
+import dagger.internal.LazyClassKeyMap;
 import dagger.internal.Preconditions;
-import java.util.Collections;
+import dagger.internal.Provider;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.processing.Generated;
-import javax.inject.Provider;
+import okhttp3.OkHttpClient;
+import retrofit2.Retrofit;
 
 @DaggerGenerated
 @Generated(
@@ -51,25 +113,20 @@ public final class DaggerMacrosApp_HiltComponents_SingletonC {
     return new Builder();
   }
 
-  public static MacrosApp_HiltComponents.SingletonC create() {
-    return new Builder().build();
-  }
-
   public static final class Builder {
+    private ApplicationContextModule applicationContextModule;
+
     private Builder() {
     }
 
-    /**
-     * @deprecated This module is declared, but an instance is not used in the component. This method is a no-op. For more, see https://dagger.dev/unused-modules.
-     */
-    @Deprecated
     public Builder applicationContextModule(ApplicationContextModule applicationContextModule) {
-      Preconditions.checkNotNull(applicationContextModule);
+      this.applicationContextModule = Preconditions.checkNotNull(applicationContextModule);
       return this;
     }
 
     public MacrosApp_HiltComponents.SingletonC build() {
-      return new SingletonCImpl();
+      Preconditions.checkBuilderRequirement(applicationContextModule, ApplicationContextModule.class);
+      return new SingletonCImpl(applicationContextModule);
     }
   }
 
@@ -363,12 +420,12 @@ public final class DaggerMacrosApp_HiltComponents_SingletonC {
 
     @Override
     public DefaultViewModelFactories.InternalFactoryFactory getHiltInternalFactoryFactory() {
-      return DefaultViewModelFactories_InternalFactoryFactory_Factory.newInstance(Collections.<Class<?>, Boolean>emptyMap(), new ViewModelCBuilder(singletonCImpl, activityRetainedCImpl));
+      return DefaultViewModelFactories_InternalFactoryFactory_Factory.newInstance(getViewModelKeys(), new ViewModelCBuilder(singletonCImpl, activityRetainedCImpl));
     }
 
     @Override
     public Map<Class<?>, Boolean> getViewModelKeys() {
-      return Collections.<Class<?>, Boolean>emptyMap();
+      return LazyClassKeyMap.<Boolean>of(ImmutableMap.<String, Boolean>builderWithExpectedSize(7).put(DiaryViewModel_HiltModules_KeyModule_Provide_LazyMapKey.lazyClassKeyName, DiaryViewModel_HiltModules.KeyModule.provide()).put(ExerciseViewModel_HiltModules_KeyModule_Provide_LazyMapKey.lazyClassKeyName, ExerciseViewModel_HiltModules.KeyModule.provide()).put(FoodDetailViewModel_HiltModules_KeyModule_Provide_LazyMapKey.lazyClassKeyName, FoodDetailViewModel_HiltModules.KeyModule.provide()).put(GoalsViewModel_HiltModules_KeyModule_Provide_LazyMapKey.lazyClassKeyName, GoalsViewModel_HiltModules.KeyModule.provide()).put(PhotoViewModel_HiltModules_KeyModule_Provide_LazyMapKey.lazyClassKeyName, PhotoViewModel_HiltModules.KeyModule.provide()).put(ProgressChartViewModel_HiltModules_KeyModule_Provide_LazyMapKey.lazyClassKeyName, ProgressChartViewModel_HiltModules.KeyModule.provide()).put(SearchViewModel_HiltModules_KeyModule_Provide_LazyMapKey.lazyClassKeyName, SearchViewModel_HiltModules.KeyModule.provide()).build());
     }
 
     @Override
@@ -388,29 +445,105 @@ public final class DaggerMacrosApp_HiltComponents_SingletonC {
   }
 
   private static final class ViewModelCImpl extends MacrosApp_HiltComponents.ViewModelC {
+    private final SavedStateHandle savedStateHandle;
+
     private final SingletonCImpl singletonCImpl;
 
     private final ActivityRetainedCImpl activityRetainedCImpl;
 
     private final ViewModelCImpl viewModelCImpl = this;
 
+    private Provider<DiaryViewModel> diaryViewModelProvider;
+
+    private Provider<ExerciseViewModel> exerciseViewModelProvider;
+
+    private Provider<FoodDetailViewModel> foodDetailViewModelProvider;
+
+    private Provider<GoalsViewModel> goalsViewModelProvider;
+
+    private Provider<PhotoViewModel> photoViewModelProvider;
+
+    private Provider<ProgressChartViewModel> progressChartViewModelProvider;
+
+    private Provider<SearchViewModel> searchViewModelProvider;
+
     private ViewModelCImpl(SingletonCImpl singletonCImpl,
         ActivityRetainedCImpl activityRetainedCImpl, SavedStateHandle savedStateHandleParam,
         ViewModelLifecycle viewModelLifecycleParam) {
       this.singletonCImpl = singletonCImpl;
       this.activityRetainedCImpl = activityRetainedCImpl;
-
+      this.savedStateHandle = savedStateHandleParam;
+      initialize(savedStateHandleParam, viewModelLifecycleParam);
 
     }
 
+    @SuppressWarnings("unchecked")
+    private void initialize(final SavedStateHandle savedStateHandleParam,
+        final ViewModelLifecycle viewModelLifecycleParam) {
+      this.diaryViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 0);
+      this.exerciseViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 1);
+      this.foodDetailViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 2);
+      this.goalsViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 3);
+      this.photoViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 4);
+      this.progressChartViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 5);
+      this.searchViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 6);
+    }
+
     @Override
-    public Map<Class<?>, Provider<ViewModel>> getHiltViewModelMap() {
-      return Collections.<Class<?>, Provider<ViewModel>>emptyMap();
+    public Map<Class<?>, javax.inject.Provider<ViewModel>> getHiltViewModelMap() {
+      return LazyClassKeyMap.<javax.inject.Provider<ViewModel>>of(ImmutableMap.<String, javax.inject.Provider<ViewModel>>builderWithExpectedSize(7).put(DiaryViewModel_HiltModules_BindsModule_Binds_LazyMapKey.lazyClassKeyName, ((Provider) diaryViewModelProvider)).put(ExerciseViewModel_HiltModules_BindsModule_Binds_LazyMapKey.lazyClassKeyName, ((Provider) exerciseViewModelProvider)).put(FoodDetailViewModel_HiltModules_BindsModule_Binds_LazyMapKey.lazyClassKeyName, ((Provider) foodDetailViewModelProvider)).put(GoalsViewModel_HiltModules_BindsModule_Binds_LazyMapKey.lazyClassKeyName, ((Provider) goalsViewModelProvider)).put(PhotoViewModel_HiltModules_BindsModule_Binds_LazyMapKey.lazyClassKeyName, ((Provider) photoViewModelProvider)).put(ProgressChartViewModel_HiltModules_BindsModule_Binds_LazyMapKey.lazyClassKeyName, ((Provider) progressChartViewModelProvider)).put(SearchViewModel_HiltModules_BindsModule_Binds_LazyMapKey.lazyClassKeyName, ((Provider) searchViewModelProvider)).build());
     }
 
     @Override
     public Map<Class<?>, Object> getHiltViewModelAssistedMap() {
-      return Collections.<Class<?>, Object>emptyMap();
+      return ImmutableMap.<Class<?>, Object>of();
+    }
+
+    private static final class SwitchingProvider<T> implements Provider<T> {
+      private final SingletonCImpl singletonCImpl;
+
+      private final ActivityRetainedCImpl activityRetainedCImpl;
+
+      private final ViewModelCImpl viewModelCImpl;
+
+      private final int id;
+
+      SwitchingProvider(SingletonCImpl singletonCImpl, ActivityRetainedCImpl activityRetainedCImpl,
+          ViewModelCImpl viewModelCImpl, int id) {
+        this.singletonCImpl = singletonCImpl;
+        this.activityRetainedCImpl = activityRetainedCImpl;
+        this.viewModelCImpl = viewModelCImpl;
+        this.id = id;
+      }
+
+      @SuppressWarnings("unchecked")
+      @Override
+      public T get() {
+        switch (id) {
+          case 0: // com.macros.agent.ui.screens.diary.DiaryViewModel 
+          return (T) new DiaryViewModel(singletonCImpl.diaryRepositoryProvider.get(), singletonCImpl.goalsRepositoryProvider.get(), singletonCImpl.exerciseRepositoryProvider.get(), singletonCImpl.userMealRepositoryProvider.get());
+
+          case 1: // com.macros.agent.ui.screens.exercise.ExerciseViewModel 
+          return (T) new ExerciseViewModel(singletonCImpl.exerciseRepositoryProvider.get());
+
+          case 2: // com.macros.agent.ui.screens.food.FoodDetailViewModel 
+          return (T) new FoodDetailViewModel(singletonCImpl.foodRepositoryProvider.get(), singletonCImpl.diaryRepositoryProvider.get(), viewModelCImpl.savedStateHandle);
+
+          case 3: // com.macros.agent.ui.screens.settings.GoalsViewModel 
+          return (T) new GoalsViewModel(singletonCImpl.goalsRepositoryProvider.get());
+
+          case 4: // com.macros.agent.ui.screens.photo.PhotoViewModel 
+          return (T) new PhotoViewModel(singletonCImpl.geminiServiceProvider.get(), singletonCImpl.diaryRepositoryProvider.get(), singletonCImpl.geminiAnalysisDao());
+
+          case 5: // com.macros.agent.ui.screens.diary.ProgressChartViewModel 
+          return (T) new ProgressChartViewModel(singletonCImpl.diaryRepositoryProvider.get(), singletonCImpl.goalsRepositoryProvider.get());
+
+          case 6: // com.macros.agent.ui.screens.search.SearchViewModel 
+          return (T) new SearchViewModel(singletonCImpl.foodRepositoryProvider.get(), singletonCImpl.userMealRepositoryProvider.get(), singletonCImpl.diaryRepositoryProvider.get());
+
+          default: throw new AssertionError(id);
+        }
+      }
     }
   }
 
@@ -419,7 +552,7 @@ public final class DaggerMacrosApp_HiltComponents_SingletonC {
 
     private final ActivityRetainedCImpl activityRetainedCImpl = this;
 
-    private dagger.internal.Provider<ActivityRetainedLifecycle> provideActivityRetainedLifecycleProvider;
+    private Provider<ActivityRetainedLifecycle> provideActivityRetainedLifecycleProvider;
 
     private ActivityRetainedCImpl(SingletonCImpl singletonCImpl,
         SavedStateHandleHolder savedStateHandleHolderParam) {
@@ -444,7 +577,7 @@ public final class DaggerMacrosApp_HiltComponents_SingletonC {
       return provideActivityRetainedLifecycleProvider.get();
     }
 
-    private static final class SwitchingProvider<T> implements dagger.internal.Provider<T> {
+    private static final class SwitchingProvider<T> implements Provider<T> {
       private final SingletonCImpl singletonCImpl;
 
       private final ActivityRetainedCImpl activityRetainedCImpl;
@@ -484,11 +617,75 @@ public final class DaggerMacrosApp_HiltComponents_SingletonC {
   }
 
   private static final class SingletonCImpl extends MacrosApp_HiltComponents.SingletonC {
+    private final ApplicationContextModule applicationContextModule;
+
     private final SingletonCImpl singletonCImpl = this;
 
-    private SingletonCImpl() {
+    private Provider<MacrosDatabase> provideDatabaseProvider;
 
+    private Provider<DiaryRepository> diaryRepositoryProvider;
 
+    private Provider<GoalsRepository> goalsRepositoryProvider;
+
+    private Provider<GoogleFitService> googleFitServiceProvider;
+
+    private Provider<ExerciseRepository> exerciseRepositoryProvider;
+
+    private Provider<UserMealRepository> userMealRepositoryProvider;
+
+    private Provider<OkHttpClient> provideOkHttpClientProvider;
+
+    private Provider<Retrofit> provideUsdaRetrofitProvider;
+
+    private Provider<UsdaApiService> provideUsdaApiServiceProvider;
+
+    private Provider<FoodRepository> foodRepositoryProvider;
+
+    private Provider<GeminiService> geminiServiceProvider;
+
+    private SingletonCImpl(ApplicationContextModule applicationContextModuleParam) {
+      this.applicationContextModule = applicationContextModuleParam;
+      initialize(applicationContextModuleParam);
+
+    }
+
+    private DiaryDao diaryDao() {
+      return DatabaseModule_ProvideDiaryDaoFactory.provideDiaryDao(provideDatabaseProvider.get());
+    }
+
+    private GoalsDao goalsDao() {
+      return DatabaseModule_ProvideGoalsDaoFactory.provideGoalsDao(provideDatabaseProvider.get());
+    }
+
+    private ExerciseDao exerciseDao() {
+      return DatabaseModule_ProvideExerciseDaoFactory.provideExerciseDao(provideDatabaseProvider.get());
+    }
+
+    private UserMealDao userMealDao() {
+      return DatabaseModule_ProvideUserMealDaoFactory.provideUserMealDao(provideDatabaseProvider.get());
+    }
+
+    private FoodDao foodDao() {
+      return DatabaseModule_ProvideFoodDaoFactory.provideFoodDao(provideDatabaseProvider.get());
+    }
+
+    private GeminiAnalysisDao geminiAnalysisDao() {
+      return DatabaseModule_ProvideGeminiAnalysisDaoFactory.provideGeminiAnalysisDao(provideDatabaseProvider.get());
+    }
+
+    @SuppressWarnings("unchecked")
+    private void initialize(final ApplicationContextModule applicationContextModuleParam) {
+      this.provideDatabaseProvider = DoubleCheck.provider(new SwitchingProvider<MacrosDatabase>(singletonCImpl, 1));
+      this.diaryRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<DiaryRepository>(singletonCImpl, 0));
+      this.goalsRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<GoalsRepository>(singletonCImpl, 2));
+      this.googleFitServiceProvider = DoubleCheck.provider(new SwitchingProvider<GoogleFitService>(singletonCImpl, 4));
+      this.exerciseRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<ExerciseRepository>(singletonCImpl, 3));
+      this.userMealRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<UserMealRepository>(singletonCImpl, 5));
+      this.provideOkHttpClientProvider = DoubleCheck.provider(new SwitchingProvider<OkHttpClient>(singletonCImpl, 9));
+      this.provideUsdaRetrofitProvider = DoubleCheck.provider(new SwitchingProvider<Retrofit>(singletonCImpl, 8));
+      this.provideUsdaApiServiceProvider = DoubleCheck.provider(new SwitchingProvider<UsdaApiService>(singletonCImpl, 7));
+      this.foodRepositoryProvider = DoubleCheck.provider(new SwitchingProvider<FoodRepository>(singletonCImpl, 6));
+      this.geminiServiceProvider = DoubleCheck.provider(new SwitchingProvider<GeminiService>(singletonCImpl, 10));
     }
 
     @Override
@@ -497,7 +694,7 @@ public final class DaggerMacrosApp_HiltComponents_SingletonC {
 
     @Override
     public Set<Boolean> getDisableFragmentGetContextFix() {
-      return Collections.<Boolean>emptySet();
+      return ImmutableSet.<Boolean>of();
     }
 
     @Override
@@ -508,6 +705,64 @@ public final class DaggerMacrosApp_HiltComponents_SingletonC {
     @Override
     public ServiceComponentBuilder serviceComponentBuilder() {
       return new ServiceCBuilder(singletonCImpl);
+    }
+
+    @CanIgnoreReturnValue
+    private ExerciseRepository injectExerciseRepository(ExerciseRepository instance) {
+      ExerciseRepository_MembersInjector.injectGoogleFitService(instance, googleFitServiceProvider.get());
+      return instance;
+    }
+
+    private static final class SwitchingProvider<T> implements Provider<T> {
+      private final SingletonCImpl singletonCImpl;
+
+      private final int id;
+
+      SwitchingProvider(SingletonCImpl singletonCImpl, int id) {
+        this.singletonCImpl = singletonCImpl;
+        this.id = id;
+      }
+
+      @SuppressWarnings("unchecked")
+      @Override
+      public T get() {
+        switch (id) {
+          case 0: // com.macros.agent.data.repository.DiaryRepository 
+          return (T) new DiaryRepository(singletonCImpl.diaryDao());
+
+          case 1: // com.macros.agent.data.local.MacrosDatabase 
+          return (T) DatabaseModule_ProvideDatabaseFactory.provideDatabase(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule));
+
+          case 2: // com.macros.agent.data.repository.GoalsRepository 
+          return (T) new GoalsRepository(singletonCImpl.goalsDao());
+
+          case 3: // com.macros.agent.data.repository.ExerciseRepository 
+          return (T) singletonCImpl.injectExerciseRepository(ExerciseRepository_Factory.newInstance(singletonCImpl.exerciseDao()));
+
+          case 4: // com.macros.agent.data.remote.api.GoogleFitService 
+          return (T) new GoogleFitService(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule));
+
+          case 5: // com.macros.agent.data.repository.UserMealRepository 
+          return (T) new UserMealRepository(singletonCImpl.userMealDao());
+
+          case 6: // com.macros.agent.data.repository.FoodRepository 
+          return (T) new FoodRepository(singletonCImpl.foodDao(), singletonCImpl.provideUsdaApiServiceProvider.get(), NetworkModule_ProvideUsdaApiKeyFactory.provideUsdaApiKey());
+
+          case 7: // com.macros.agent.data.remote.api.UsdaApiService 
+          return (T) NetworkModule_ProvideUsdaApiServiceFactory.provideUsdaApiService(singletonCImpl.provideUsdaRetrofitProvider.get());
+
+          case 8: // @javax.inject.Named("usda") retrofit2.Retrofit 
+          return (T) NetworkModule_ProvideUsdaRetrofitFactory.provideUsdaRetrofit(singletonCImpl.provideOkHttpClientProvider.get());
+
+          case 9: // okhttp3.OkHttpClient 
+          return (T) NetworkModule_ProvideOkHttpClientFactory.provideOkHttpClient();
+
+          case 10: // com.macros.agent.data.remote.api.GeminiService 
+          return (T) new GeminiService();
+
+          default: throw new AssertionError(id);
+        }
+      }
     }
   }
 }

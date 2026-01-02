@@ -2,6 +2,13 @@ package com.macros.agent;
 
 import com.macros.agent.di.DatabaseModule;
 import com.macros.agent.di.NetworkModule;
+import com.macros.agent.ui.screens.diary.DiaryViewModel_HiltModules;
+import com.macros.agent.ui.screens.diary.ProgressChartViewModel_HiltModules;
+import com.macros.agent.ui.screens.exercise.ExerciseViewModel_HiltModules;
+import com.macros.agent.ui.screens.food.FoodDetailViewModel_HiltModules;
+import com.macros.agent.ui.screens.photo.PhotoViewModel_HiltModules;
+import com.macros.agent.ui.screens.search.SearchViewModel_HiltModules;
+import com.macros.agent.ui.screens.settings.GoalsViewModel_HiltModules;
 import dagger.Binds;
 import dagger.Component;
 import dagger.Module;
@@ -154,10 +161,17 @@ public final class MacrosApp_HiltComponents {
 
   @Subcomponent(
       modules = {
+          DiaryViewModel_HiltModules.KeyModule.class,
+          ExerciseViewModel_HiltModules.KeyModule.class,
+          FoodDetailViewModel_HiltModules.KeyModule.class,
+          GoalsViewModel_HiltModules.KeyModule.class,
           HiltWrapper_ActivityRetainedComponentManager_LifecycleModule.class,
           HiltWrapper_SavedStateHandleModule.class,
           ActivityCBuilderModule.class,
-          ViewModelCBuilderModule.class
+          ViewModelCBuilderModule.class,
+          PhotoViewModel_HiltModules.KeyModule.class,
+          ProgressChartViewModel_HiltModules.KeyModule.class,
+          SearchViewModel_HiltModules.KeyModule.class
       }
   )
   @ActivityRetainedScoped
@@ -192,7 +206,16 @@ public final class MacrosApp_HiltComponents {
   }
 
   @Subcomponent(
-      modules = HiltWrapper_HiltViewModelFactory_ViewModelModule.class
+      modules = {
+          DiaryViewModel_HiltModules.BindsModule.class,
+          ExerciseViewModel_HiltModules.BindsModule.class,
+          FoodDetailViewModel_HiltModules.BindsModule.class,
+          GoalsViewModel_HiltModules.BindsModule.class,
+          HiltWrapper_HiltViewModelFactory_ViewModelModule.class,
+          PhotoViewModel_HiltModules.BindsModule.class,
+          ProgressChartViewModel_HiltModules.BindsModule.class,
+          SearchViewModel_HiltModules.BindsModule.class
+      }
   )
   @ViewModelScoped
   public abstract static class ViewModelC implements ViewModelComponent,

@@ -8,6 +8,7 @@ import com.macros.agent.data.local.dao.ExerciseDao
 import com.macros.agent.data.local.dao.FoodDao
 import com.macros.agent.data.local.dao.GeminiAnalysisDao
 import com.macros.agent.data.local.dao.GoalsDao
+import com.macros.agent.data.local.dao.UserMealDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -42,7 +43,9 @@ object DatabaseModule {
     
     @Provides
     fun provideExerciseDao(database: MacrosDatabase): ExerciseDao = database.exerciseDao()
-    
     @Provides
     fun provideGeminiAnalysisDao(database: MacrosDatabase): GeminiAnalysisDao = database.geminiAnalysisDao()
+
+    @Provides
+    fun provideUserMealDao(database: MacrosDatabase): UserMealDao = database.userMealDao()
 }

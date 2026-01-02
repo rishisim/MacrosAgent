@@ -21,6 +21,8 @@ import com.macros.agent.data.local.dao.GeminiAnalysisDao;
 import com.macros.agent.data.local.dao.GeminiAnalysisDao_Impl;
 import com.macros.agent.data.local.dao.GoalsDao;
 import com.macros.agent.data.local.dao.GoalsDao_Impl;
+import com.macros.agent.data.local.dao.UserMealDao;
+import com.macros.agent.data.local.dao.UserMealDao_Impl;
 import java.lang.Class;
 import java.lang.Override;
 import java.lang.String;
@@ -47,10 +49,12 @@ public final class MacrosDatabase_Impl extends MacrosDatabase {
 
   private volatile GeminiAnalysisDao _geminiAnalysisDao;
 
+  private volatile UserMealDao _userMealDao;
+
   @Override
   @NonNull
   protected SupportSQLiteOpenHelper createOpenHelper(@NonNull final DatabaseConfiguration config) {
-    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(1) {
+    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(2) {
       @Override
       public void createAllTables(@NonNull final SupportSQLiteDatabase db) {
         db.execSQL("CREATE TABLE IF NOT EXISTS `foods` (`fdcId` INTEGER NOT NULL, `description` TEXT NOT NULL, `brandOwner` TEXT, `brandName` TEXT, `calories` REAL NOT NULL, `protein` REAL NOT NULL, `carbs` REAL NOT NULL, `fat` REAL NOT NULL, `fiber` REAL NOT NULL, `sugar` REAL NOT NULL, `sodium` REAL NOT NULL, `servingSize` REAL NOT NULL, `servingUnit` TEXT NOT NULL, `category` TEXT, `ingredients` TEXT, `barcode` TEXT, `lastUsed` INTEGER NOT NULL, `useCount` INTEGER NOT NULL, `isFavorite` INTEGER NOT NULL, `isCustom` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`fdcId`))");
@@ -62,8 +66,10 @@ public final class MacrosDatabase_Impl extends MacrosDatabase {
         db.execSQL("CREATE TABLE IF NOT EXISTS `user_goals` (`id` INTEGER NOT NULL, `dailyCalories` INTEGER NOT NULL, `proteinGrams` INTEGER NOT NULL, `carbsGrams` INTEGER NOT NULL, `fatGrams` INTEGER NOT NULL, `fiberGrams` INTEGER NOT NULL, `sugarGrams` INTEGER NOT NULL, `sodiumMg` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))");
         db.execSQL("CREATE TABLE IF NOT EXISTS `exercise_entries` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `date` TEXT NOT NULL, `source` TEXT NOT NULL, `activityName` TEXT NOT NULL, `caloriesBurned` INTEGER NOT NULL, `durationMinutes` INTEGER, `steps` INTEGER, `timestamp` INTEGER NOT NULL, `googleFitActivityId` TEXT, `notes` TEXT)");
         db.execSQL("CREATE INDEX IF NOT EXISTS `index_exercise_entries_date` ON `exercise_entries` (`date`)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS `user_meals` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `totalCalories` REAL NOT NULL, `totalProtein` REAL NOT NULL, `totalCarbs` REAL NOT NULL, `totalFat` REAL NOT NULL, `createdAt` INTEGER NOT NULL)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS `user_meal_items` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `mealId` INTEGER NOT NULL, `foodName` TEXT NOT NULL, `servingSize` REAL NOT NULL, `servingUnit` TEXT NOT NULL, `servingsConsumed` REAL NOT NULL, `calories` REAL NOT NULL, `protein` REAL NOT NULL, `carbs` REAL NOT NULL, `fat` REAL NOT NULL, `fdcId` INTEGER)");
         db.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)");
-        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4811edbd2d2d7a21ee4949b0864176b1')");
+        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4d92d7600a7d4ebf534b2d52b81f815a')");
       }
 
       @Override
@@ -73,6 +79,8 @@ public final class MacrosDatabase_Impl extends MacrosDatabase {
         db.execSQL("DROP TABLE IF EXISTS `gemini_analyses`");
         db.execSQL("DROP TABLE IF EXISTS `user_goals`");
         db.execSQL("DROP TABLE IF EXISTS `exercise_entries`");
+        db.execSQL("DROP TABLE IF EXISTS `user_meals`");
+        db.execSQL("DROP TABLE IF EXISTS `user_meal_items`");
         final List<? extends RoomDatabase.Callback> _callbacks = mCallbacks;
         if (_callbacks != null) {
           for (RoomDatabase.Callback _callback : _callbacks) {
@@ -241,9 +249,47 @@ public final class MacrosDatabase_Impl extends MacrosDatabase {
                   + " Expected:\n" + _infoExerciseEntries + "\n"
                   + " Found:\n" + _existingExerciseEntries);
         }
+        final HashMap<String, TableInfo.Column> _columnsUserMeals = new HashMap<String, TableInfo.Column>(7);
+        _columnsUserMeals.put("id", new TableInfo.Column("id", "INTEGER", true, 1, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMeals.put("name", new TableInfo.Column("name", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMeals.put("totalCalories", new TableInfo.Column("totalCalories", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMeals.put("totalProtein", new TableInfo.Column("totalProtein", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMeals.put("totalCarbs", new TableInfo.Column("totalCarbs", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMeals.put("totalFat", new TableInfo.Column("totalFat", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMeals.put("createdAt", new TableInfo.Column("createdAt", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        final HashSet<TableInfo.ForeignKey> _foreignKeysUserMeals = new HashSet<TableInfo.ForeignKey>(0);
+        final HashSet<TableInfo.Index> _indicesUserMeals = new HashSet<TableInfo.Index>(0);
+        final TableInfo _infoUserMeals = new TableInfo("user_meals", _columnsUserMeals, _foreignKeysUserMeals, _indicesUserMeals);
+        final TableInfo _existingUserMeals = TableInfo.read(db, "user_meals");
+        if (!_infoUserMeals.equals(_existingUserMeals)) {
+          return new RoomOpenHelper.ValidationResult(false, "user_meals(com.macros.agent.data.local.entity.UserMeal).\n"
+                  + " Expected:\n" + _infoUserMeals + "\n"
+                  + " Found:\n" + _existingUserMeals);
+        }
+        final HashMap<String, TableInfo.Column> _columnsUserMealItems = new HashMap<String, TableInfo.Column>(11);
+        _columnsUserMealItems.put("id", new TableInfo.Column("id", "INTEGER", true, 1, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMealItems.put("mealId", new TableInfo.Column("mealId", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMealItems.put("foodName", new TableInfo.Column("foodName", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMealItems.put("servingSize", new TableInfo.Column("servingSize", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMealItems.put("servingUnit", new TableInfo.Column("servingUnit", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMealItems.put("servingsConsumed", new TableInfo.Column("servingsConsumed", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMealItems.put("calories", new TableInfo.Column("calories", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMealItems.put("protein", new TableInfo.Column("protein", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMealItems.put("carbs", new TableInfo.Column("carbs", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMealItems.put("fat", new TableInfo.Column("fat", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsUserMealItems.put("fdcId", new TableInfo.Column("fdcId", "INTEGER", false, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        final HashSet<TableInfo.ForeignKey> _foreignKeysUserMealItems = new HashSet<TableInfo.ForeignKey>(0);
+        final HashSet<TableInfo.Index> _indicesUserMealItems = new HashSet<TableInfo.Index>(0);
+        final TableInfo _infoUserMealItems = new TableInfo("user_meal_items", _columnsUserMealItems, _foreignKeysUserMealItems, _indicesUserMealItems);
+        final TableInfo _existingUserMealItems = TableInfo.read(db, "user_meal_items");
+        if (!_infoUserMealItems.equals(_existingUserMealItems)) {
+          return new RoomOpenHelper.ValidationResult(false, "user_meal_items(com.macros.agent.data.local.entity.UserMealItem).\n"
+                  + " Expected:\n" + _infoUserMealItems + "\n"
+                  + " Found:\n" + _existingUserMealItems);
+        }
         return new RoomOpenHelper.ValidationResult(true, null);
       }
-    }, "4811edbd2d2d7a21ee4949b0864176b1", "188688e7c8c63ddbac2865f84de1a424");
+    }, "4d92d7600a7d4ebf534b2d52b81f815a", "a55e18e8fea433d0f0000ca399412767");
     final SupportSQLiteOpenHelper.Configuration _sqliteConfig = SupportSQLiteOpenHelper.Configuration.builder(config.context).name(config.name).callback(_openCallback).build();
     final SupportSQLiteOpenHelper _helper = config.sqliteOpenHelperFactory.create(_sqliteConfig);
     return _helper;
@@ -254,7 +300,7 @@ public final class MacrosDatabase_Impl extends MacrosDatabase {
   protected InvalidationTracker createInvalidationTracker() {
     final HashMap<String, String> _shadowTablesMap = new HashMap<String, String>(0);
     final HashMap<String, Set<String>> _viewTables = new HashMap<String, Set<String>>(0);
-    return new InvalidationTracker(this, _shadowTablesMap, _viewTables, "foods","diary_entries","gemini_analyses","user_goals","exercise_entries");
+    return new InvalidationTracker(this, _shadowTablesMap, _viewTables, "foods","diary_entries","gemini_analyses","user_goals","exercise_entries","user_meals","user_meal_items");
   }
 
   @Override
@@ -275,6 +321,8 @@ public final class MacrosDatabase_Impl extends MacrosDatabase {
       _db.execSQL("DELETE FROM `gemini_analyses`");
       _db.execSQL("DELETE FROM `user_goals`");
       _db.execSQL("DELETE FROM `exercise_entries`");
+      _db.execSQL("DELETE FROM `user_meals`");
+      _db.execSQL("DELETE FROM `user_meal_items`");
       super.setTransactionSuccessful();
     } finally {
       super.endTransaction();
@@ -297,6 +345,7 @@ public final class MacrosDatabase_Impl extends MacrosDatabase {
     _typeConvertersMap.put(GoalsDao.class, GoalsDao_Impl.getRequiredConverters());
     _typeConvertersMap.put(ExerciseDao.class, ExerciseDao_Impl.getRequiredConverters());
     _typeConvertersMap.put(GeminiAnalysisDao.class, GeminiAnalysisDao_Impl.getRequiredConverters());
+    _typeConvertersMap.put(UserMealDao.class, UserMealDao_Impl.getRequiredConverters());
     return _typeConvertersMap;
   }
 
@@ -381,6 +430,20 @@ public final class MacrosDatabase_Impl extends MacrosDatabase {
           _geminiAnalysisDao = new GeminiAnalysisDao_Impl(this);
         }
         return _geminiAnalysisDao;
+      }
+    }
+  }
+
+  @Override
+  public UserMealDao userMealDao() {
+    if (_userMealDao != null) {
+      return _userMealDao;
+    } else {
+      synchronized(this) {
+        if(_userMealDao == null) {
+          _userMealDao = new UserMealDao_Impl(this);
+        }
+        return _userMealDao;
       }
     }
   }

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -10,6 +12,13 @@ android {
     namespace = "com.macros.agent"
     compileSdk = 35
 
+    // Load local.properties
+    val localProperties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { localProperties.load(it) }
+    }
+
     defaultConfig {
         applicationId = "com.macros.agent"
         minSdk = 26
@@ -19,9 +28,16 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
-        // API keys - replace with your actual keys or use local.properties
-        buildConfigField("String", "USDA_API_KEY", "\"${project.findProperty("USDA_API_KEY") ?: "DEMO_KEY"}\"")
-        buildConfigField("String", "GEMINI_API_KEY", "\"${project.findProperty("GEMINI_API_KEY") ?: ""}\"")
+        // API keys - load from local.properties if available, fallback to project properties
+        val usdaKey = (localProperties.getProperty("USDA_API_KEY") ?: project.findProperty("USDA_API_KEY") as? String ?: "DEMO_KEY").replace("\"", "")
+        val geminiKey = (localProperties.getProperty("GEMINI_API_KEY") ?: project.findProperty("GEMINI_API_KEY") as? String ?: "").replace("\"", "")
+        
+        buildConfigField("String", "USDA_API_KEY", "\"$usdaKey\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
+        
+        vectorDrawables {
+            useSupportLibrary = true
+        }
     }
 
     buildTypes {
@@ -50,6 +66,20 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/INDEX.LIST"
+            excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/LICENSE"
+            excludes += "META-INF/LICENSE.txt"
+            excludes += "META-INF/license.txt"
+            excludes += "META-INF/NOTICE"
+            excludes += "META-INF/NOTICE.txt"
+            excludes += "META-INF/notice.txt"
+        }
     }
 }
 
@@ -90,8 +120,8 @@ dependencies {
     // Image Loading
     implementation(libs.coil.compose)
     
-    // Gemini AI
-    implementation(libs.generative.ai)
+    // Gemini AI (New google-genai SDK)
+    implementation(libs.google.genai)
     
     // ML Kit Barcode Scanning
     implementation(libs.mlkit.barcode.scanning)
@@ -103,11 +133,20 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.androidx.camera.mlkit.vision)
     
+    // Google Fit
+    implementation(libs.play.services.fitness)
+    implementation(libs.play.services.auth)
+
     // DataStore
     implementation(libs.androidx.datastore.preferences)
     
+    // Vico Charts
+    implementation(libs.vico.compose)
+    implementation(libs.vico.m3)
+
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.play.services)
     
     // Testing
     testImplementation(libs.junit)

@@ -56,4 +56,10 @@ object NetworkModule {
     @Provides
     @Named("geminiApiKey")
     fun provideGeminiApiKey(): String = BuildConfig.GEMINI_API_KEY
+    
+    @Provides
+    @Singleton
+    fun provideUsdaApiService(@Named("usda") retrofit: Retrofit): com.macros.agent.data.remote.api.UsdaApiService {
+        return retrofit.create(com.macros.agent.data.remote.api.UsdaApiService::class.java)
+    }
 }

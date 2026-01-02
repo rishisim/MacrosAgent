@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "com.macros.agent.app-mergeDebugResources-77:/values-v26/values-v26.xml",
+            "outputFile": "com.macros.agent.app-mergeDebugResources-78:/values-v26/values-v26.xml",
             "map": [
                 {
-                    "source": "/Users/rishisim/.gradle/caches/8.13/transforms/c983f3442e0a11c43755bf3afcfc0c97/transformed/appcompat-1.6.1/res/values-v26/values-v26.xml",
+                    "source": "/Users/rishisim/.gradle/caches/8.13/transforms/d270f2c04ab1cf06012b2f289cb8d311/transformed/appcompat-1.7.0/res/values-v26/values-v26.xml",
                     "from": {
                         "startLines": "2,3,4,8,12,16",
                         "startColumns": "4,4,4,4,4,4",
