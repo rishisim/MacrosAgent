@@ -18,3 +18,5 @@ local.properties
 [Pp][Rr][Oo][Jj][Ee][Cc][Tt]_[Ss][Tt][Aa][Tt][Uu][Ss].[Mm][Dd]
 .env
 /mfp_mcp_server/.env
+/build
+/app/build

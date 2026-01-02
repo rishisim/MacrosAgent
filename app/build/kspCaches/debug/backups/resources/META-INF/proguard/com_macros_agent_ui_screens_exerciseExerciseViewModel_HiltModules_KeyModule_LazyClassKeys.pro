@@ -1,6 +1,0 @@
--keep,allowobfuscation,allowshrinking class com.macros.agent.ui.screens.settings.GoalsViewModel
--keep,allowobfuscation,allowshrinking class com.macros.agent.ui.screens.settings.GoalsViewModel
--keep,allowobfuscation,allowshrinking class com.macros.agent.ui.screens.search.SearchViewModel
--keep,allowobfuscation,allowshrinking class com.macros.agent.ui.screens.search.SearchViewModel
--keep,allowobfuscation,allowshrinking class com.macros.agent.ui.screens.exercise.ExerciseViewModel
--keep,allowobfuscation,allowshrinking class com.macros.agent.ui.screens.exercise.ExerciseViewModel
