@@ -105,16 +105,55 @@ fun SearchScreen(
             
             when (val state = uiState.searchState) {
                 is SearchState.Idle -> {
-                    // Show recents and favorites
-                    if (uiState.favorites.isNotEmpty()) {
-                        Text(
-                            text = "Favorites",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LazyColumn {
-                            items(uiState.favorites.take(5)) { food ->
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Custom Meals Section (Prominent)
+                        item {
+                            Text(
+                                text = "My Custom Meals",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        
+                        if (uiState.customMeals.isEmpty()) {
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                    )
+                                ) {
+                                    Text(
+                                        text = "No custom meals yet. Save a group of items from your diary as a 'Custom Meal' to see them here!",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                            }
+                        } else {
+                            items(uiState.customMeals) { meal ->
+                                CustomMealItem(
+                                    mealWithItems = meal,
+                                    onAddClick = { viewModel.addMealToLog(meal, mealType) }
+                                )
+                            }
+                        }
+                        
+                        // Favorites
+                        if (uiState.favorites.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = "Favorites",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            items(uiState.favorites.take(10)) { food ->
                                 FoodSearchItem(
                                     food = food,
                                     onFoodClick = {
@@ -125,17 +164,16 @@ fun SearchScreen(
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
-                    
-                    if (uiState.recentFoods.isNotEmpty()) {
-                        Text(
-                            text = "Recent",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LazyColumn {
+                        
+                        // Recent Foods
+                        if (uiState.recentFoods.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = "Recent",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                             items(uiState.recentFoods.take(10)) { food ->
                                 FoodSearchItem(
                                     food = food,
@@ -147,35 +185,20 @@ fun SearchScreen(
                                 )
                             }
                         }
-                    }
-                    
-                    if (uiState.customMeals.isNotEmpty()) {
-                        Text(
-                            text = "Custom Meals",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LazyColumn {
-                            items(uiState.customMeals) { meal ->
-                                CustomMealItem(
-                                    mealWithItems = meal,
-                                    onAddClick = { viewModel.addMealToLog(meal, mealType) }
-                                )
+                        
+                        if (uiState.favorites.isEmpty() && uiState.recentFoods.isEmpty() && uiState.customMeals.isEmpty() && uiState.query.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier.fillParentMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "Search for foods or scan a barcode",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
-                        }
-                    }
-                    
-                    if (uiState.favorites.isEmpty() && uiState.recentFoods.isEmpty() && uiState.customMeals.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Search for foods or scan a barcode",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                 }

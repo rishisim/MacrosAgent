@@ -1,7 +1,9 @@
 package com.macros.agent.ui.screens.settings
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -71,6 +75,168 @@ fun GoalsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Goal Calculator Section
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Goal Calculator",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                    
+                    Text(
+                        text = "Calculate optimal calories and macros based on your profile.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Gender and Age
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Gender", style = MaterialTheme.typography.labelSmall)
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                listOf("Male", "Female").forEach { gender ->
+                                    val selected = uiState.goals.gender == gender
+                                    OutlinedButton(
+                                        onClick = { viewModel.updateGender(gender) },
+                                        modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+                                        shape = MaterialTheme.shapes.small,
+                                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                                        colors = if (selected) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.outlinedButtonColors()
+                                    ) {
+                                        Text(gender, style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+                        OutlinedTextField(
+                            value = uiState.goals.age.toString(),
+                            onValueChange = { it.toIntOrNull()?.let { v -> viewModel.updateAge(v) } },
+                            modifier = Modifier.weight(0.5f),
+                            label = { Text("Age") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true
+                        )
+                    }
+                    
+                    // Height and Units
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Bottom) {
+                        OutlinedTextField(
+                            value = uiState.goals.height.toString(),
+                            onValueChange = { it.toFloatOrNull()?.let { v -> viewModel.updateHeight(v) } },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Height") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true
+                        )
+                        Row(modifier = Modifier.weight(1f)) {
+                            listOf("cm", "in").forEach { unit ->
+                                val selected = uiState.goals.heightUnit == unit
+                                OutlinedButton(
+                                    onClick = { viewModel.updateHeightUnit(unit) },
+                                    modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+                                    shape = MaterialTheme.shapes.small,
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = if (selected) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.outlinedButtonColors()
+                                ) {
+                                    Text(unit, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Current Weight and Units
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Bottom) {
+                        OutlinedTextField(
+                            value = uiState.goals.currentWeight.toString(),
+                            onValueChange = { it.toFloatOrNull()?.let { v -> viewModel.updateCurrentWeight(v) } },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Current Weight") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true
+                        )
+                        Row(modifier = Modifier.weight(1f)) {
+                            listOf("kg", "lbs").forEach { unit ->
+                                val selected = uiState.goals.weightUnit == unit
+                                OutlinedButton(
+                                    onClick = { viewModel.updateWeightUnit(unit) },
+                                    modifier = Modifier.weight(1f).padding(horizontal = 2.dp),
+                                    shape = MaterialTheme.shapes.small,
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = if (selected) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.outlinedButtonColors()
+                                ) {
+                                    Text(unit, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Target Weight and Gain Rate
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        OutlinedTextField(
+                            value = uiState.goals.targetWeight.toString(),
+                            onValueChange = { it.toFloatOrNull()?.let { v -> viewModel.updateTargetWeight(v) } },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Target Weight") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = uiState.goals.weightGainRate.toString(),
+                            onValueChange = { it.toFloatOrNull()?.let { v -> viewModel.updateWeightGainRate(v) } },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Gain Rate / week") },
+                            suffix = { Text(uiState.goals.weightUnit) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true
+                        )
+                    }
+                    
+                    // Activity Level
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text("Activity Level", style = MaterialTheme.typography.labelSmall)
+                        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            listOf("Sedentary", "Light", "Moderate", "Very", "Super").forEach { level ->
+                                val selected = uiState.goals.activityLevel == level
+                                OutlinedButton(
+                                    onClick = { viewModel.updateActivityLevel(level) },
+                                    shape = MaterialTheme.shapes.small,
+                                    colors = if (selected) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.outlinedButtonColors()
+                                ) {
+                                    Text(level, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                    
+                    Button(
+                        onClick = { viewModel.calculateAndApplyGoals() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text("Calculate & Apply")
+                    }
+                }
+            }
+
             // Calories
             Card(
                 modifier = Modifier.fillMaxWidth(),

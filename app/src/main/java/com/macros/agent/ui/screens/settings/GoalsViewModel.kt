@@ -95,6 +95,120 @@ class GoalsViewModel @Inject constructor(
         }
     }
     
+    fun updateAge(age: Int) {
+        _uiState.value = _uiState.value.copy(
+            goals = _uiState.value.goals.copy(age = age),
+            saveSuccess = false
+        )
+    }
+
+    fun updateGender(gender: String) {
+        _uiState.value = _uiState.value.copy(
+            goals = _uiState.value.goals.copy(gender = gender),
+            saveSuccess = false
+        )
+    }
+
+    fun updateCurrentWeight(weight: Float) {
+        _uiState.value = _uiState.value.copy(
+            goals = _uiState.value.goals.copy(currentWeight = weight),
+            saveSuccess = false
+        )
+    }
+
+    fun updateTargetWeight(weight: Float) {
+        _uiState.value = _uiState.value.copy(
+            goals = _uiState.value.goals.copy(targetWeight = weight),
+            saveSuccess = false
+        )
+    }
+
+    fun updateHeight(height: Float) {
+        _uiState.value = _uiState.value.copy(
+            goals = _uiState.value.goals.copy(height = height),
+            saveSuccess = false
+        )
+    }
+
+    fun updateActivityLevel(level: String) {
+        _uiState.value = _uiState.value.copy(
+            goals = _uiState.value.goals.copy(activityLevel = level),
+            saveSuccess = false
+        )
+    }
+
+    fun updateWeightGainRate(rate: Float) {
+        _uiState.value = _uiState.value.copy(
+            goals = _uiState.value.goals.copy(weightGainRate = rate),
+            saveSuccess = false
+        )
+    }
+
+    fun updateWeightUnit(unit: String) {
+        _uiState.value = _uiState.value.copy(
+            goals = _uiState.value.goals.copy(weightUnit = unit),
+            saveSuccess = false
+        )
+    }
+
+    fun updateHeightUnit(unit: String) {
+        _uiState.value = _uiState.value.copy(
+            goals = _uiState.value.goals.copy(heightUnit = unit),
+            saveSuccess = false
+        )
+    }
+
+    fun calculateAndApplyGoals() {
+        val goals = _uiState.value.goals
+        
+        // 1. Convert to Metric (kg, cm)
+        val weightKg = if (goals.weightUnit == "lbs") goals.currentWeight * 0.453592f else goals.currentWeight
+        val heightCm = if (goals.heightUnit == "in") goals.height * 2.54f else goals.height
+        
+        // 2. Mifflin-St Jeor BMR
+        val bmr = if (goals.gender == "Male") {
+            (10 * weightKg) + (6.25 * heightCm) - (5 * goals.age) + 5
+        } else {
+            (10 * weightKg) + (6.25 * heightCm) - (5 * goals.age) - 161
+        }
+        
+        // 3. Apply Activity Multiplier
+        val multiplier = when (goals.activityLevel) {
+            "Sedentary" -> 1.2f
+            "Light" -> 1.375f
+            "Moderate" -> 1.55f
+            "Very" -> 1.725f
+            "Super" -> 1.9f
+            else -> 1.2f
+        }
+        val tdee = bmr * multiplier
+        
+        // 4. Add Surplus for weight gain
+        // 1kg/week surplus is ~1100 kcal extra/day. 1lb/week is ~500 kcal extra/day.
+        val surplusPerDay = if (goals.weightUnit == "lbs") {
+            goals.weightGainRate * 500f
+        } else {
+            goals.weightGainRate * 1100f
+        }
+        
+        val targetCalories = (tdee + surplusPerDay).toInt()
+        
+        // 5. Macro Distribution (e.g., 30/40/30)
+        val protein = (targetCalories * 0.30 / 4).toInt()
+        val carbs = (targetCalories * 0.40 / 4).toInt()
+        val fat = (targetCalories * 0.30 / 9).toInt()
+        
+        _uiState.value = _uiState.value.copy(
+            goals = _uiState.value.goals.copy(
+                dailyCalories = targetCalories,
+                proteinGrams = protein,
+                carbsGrams = carbs,
+                fatGrams = fat
+            ),
+            saveSuccess = false
+        )
+    }
+    
     /**
      * Calculate macro distribution based on calories.
      * Common split: 30% protein, 40% carbs, 30% fat

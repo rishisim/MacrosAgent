@@ -19,7 +19,10 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -163,15 +166,32 @@ fun DiaryScreen(
                             )
                         }
                     } else {
-                        items(
-                            items = entries,
-                            key = { entry -> entry.id }
-                        ) { entry ->
-                            FoodEntryRow(
-                                entry = entry,
-                                onDelete = { viewModel.deleteEntry(entry) },
-                                onClick = { onNavigateToEdit(entry.id) }
-                            )
+                        // Group entries by Gemini Analysis ID
+                        val groupedByAnalysis = entries.groupBy { it.geminiAnalysisId }
+                        
+                        groupedByAnalysis.forEach { (analysisId, groupEntries) ->
+                            if (analysisId != null && groupEntries.size > 1) {
+                                // Modular Meal (Multiple items from same scan)
+                                item(key = "modular_${analysisId}") {
+                                    ModularMealRow(
+                                        entries = groupEntries,
+                                        onDeleteEntry = { viewModel.deleteEntry(it) },
+                                        onEditEntry = { onNavigateToEdit(it.id) }
+                                    )
+                                }
+                            } else {
+                                // Individual items
+                                items(
+                                    items = groupEntries,
+                                    key = { entry -> entry.id }
+                                ) { entry ->
+                                    FoodEntryRow(
+                                        entry = entry,
+                                        onDelete = { viewModel.deleteEntry(entry) },
+                                        onClick = { onNavigateToEdit(entry.id) }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -412,6 +432,122 @@ private fun MealEmptyState(text: String, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModularMealRow(
+    entries: List<DiaryEntry>,
+    onDeleteEntry: (DiaryEntry) -> Unit,
+    onEditEntry: (DiaryEntry) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val totalCalories = entries.sumOf { it.calories.toDouble() }.toInt()
+    val totalProtein = entries.sumOf { it.protein.toDouble() }.toInt()
+    val totalCarbs = entries.sumOf { it.carbs.toDouble() }.toInt()
+    val totalFat = entries.sumOf { it.fat.toDouble() }.toInt()
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Modular Meal",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "${entries.size} items",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "$totalCalories cal",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = CaloriesColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "P:$totalProtein C:$totalCarbs F:$totalFat",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "Show less" else "Show more"
+                    )
+                }
+            }
+
+            if (expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 32.dp, end = 16.dp, bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    entries.forEach { entry ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onEditEntry(entry) }
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = entry.foodName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${entry.servingSize.toInt()} ${entry.servingUnit}",
+                                    style = MaterialTheme.typography.labelSmall, // Changed from labelExtraSmall
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = "${entry.calories.toInt()} cal",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = CaloriesColor
+                            )
+                        }
+                    }
+                }
             }
         }
     }

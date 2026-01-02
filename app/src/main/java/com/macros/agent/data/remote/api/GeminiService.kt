@@ -74,40 +74,44 @@ class GeminiService @Inject constructor() {
     }
     
     private val systemPrompt = """
-You are a nutrition analysis expert. Analyze the food in this image and provide detailed macro estimates.
+You are a nutrition analysis API. Your ONLY output must be valid JSON. No explanations, no markdown, no commentary.
 
-For each distinct food item you see, estimate:
-1. What the food is
-2. Approximate portion size (e.g., "1 cup", "6 oz", "medium slice")
-3. Estimated weight in grams
-4. Calories, protein, carbs, and fat
+TASK: Analyze the food in this image and estimate macros for EACH distinct food item.
 
-Respond ONLY with valid JSON in this exact format, no additional text:
-{
-  "foods": [
-    {
-      "name": "food name",
-      "estimatedPortionSize": "portion description",
-      "estimatedPortionGrams": 150.0,
-      "calories": 250.0,
-      "protein": 20.0,
-      "carbs": 30.0,
-      "fat": 8.0,
-      "confidence": 0.85
-    }
-  ],
-  "overallConfidence": 0.8
-}
+OUTPUT FORMAT (strict JSON, nothing else):
+{"foods":[{"name":"food name","estimatedPortionSize":"portion","estimatedPortionGrams":100.0,"calories":200.0,"protein":10.0,"carbs":25.0,"fat":8.0,"confidence":0.8}],"overallConfidence":0.8}
 
-If you cannot identify food in the image, respond with:
-{
-  "foods": [],
-  "overallConfidence": 0.0,
-  "error": "description of why analysis failed"
-}
+RULES:
+1. Return ONLY the JSON object. No text before or after.
+2. List EACH food item separately (e.g., rice, dal, curry should be 3 separate entries).
+3. Use numbers, not strings, for all numeric values.
+4. Estimate portion sizes conservatively using USDA values.
+5. Confidence should be 0.0-1.0 based on how certain you are.
 
-Be conservative with estimates. Use typical USDA values as reference.
+EXAMPLE for a complex meal (rice + dal + vegetable curry):
+{"foods":[{"name":"Basmati Rice","estimatedPortionSize":"1 cup cooked","estimatedPortionGrams":180.0,"calories":210.0,"protein":4.5,"carbs":45.0,"fat":0.5,"confidence":0.85},{"name":"Dal (Lentil Curry)","estimatedPortionSize":"0.75 cup","estimatedPortionGrams":150.0,"calories":180.0,"protein":12.0,"carbs":28.0,"fat":2.0,"confidence":0.75},{"name":"Vegetable Curry","estimatedPortionSize":"0.5 cup","estimatedPortionGrams":100.0,"calories":120.0,"protein":3.0,"carbs":15.0,"fat":6.0,"confidence":0.7}],"overallConfidence":0.77}
+
+If you cannot identify food, return:
+{"foods":[],"overallConfidence":0.0,"error":"reason"}
 """.trimIndent()
+
+    private fun extractJson(text: String): String? {
+        // Try to find JSON block in markdown
+        val markdownRegex = "```(?:json)?\\s*([\\s\\S]*?)\\s*```".toRegex()
+        val match = markdownRegex.find(text)
+        if (match != null) {
+            return match.groupValues[1]
+        }
+
+        // Fallback: find the first { and last }
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        if (start != -1 && end != -1 && end > start) {
+            return text.substring(start, end + 1)
+        }
+
+        return null
+    }
     
     /**
      * Analyze a food photo and return estimated macros.
@@ -142,7 +146,8 @@ Be conservative with estimates. Use typical USDA values as reference.
             
             // Create config with Float values
             val config = GenerateContentConfig.builder()
-                .temperature(0.3f)
+                .temperature(0.1f)
+                .responseMimeType("application/json")
                 .topK(32f)
                 .topP(0.8f)
                 .maxOutputTokens(2048)
@@ -150,7 +155,7 @@ Be conservative with estimates. Use typical USDA values as reference.
             
             // Generate content - pass single Content object
             val response = client.models.generateContent(
-                "gemini-2.5-flash",
+                "gemini-2.0-flash",
                 content,
                 config
             )
@@ -235,11 +240,9 @@ Be conservative with estimates. Use typical USDA values as reference.
     
     private fun parseResponse(responseText: String): FoodAnalysisResult {
         return try {
-            // Extract JSON from response (in case there's surrounding text)
-            val jsonStart = responseText.indexOf('{')
-            val jsonEnd = responseText.lastIndexOf('}') + 1
+            val jsonStr = extractJson(responseText)
             
-            if (jsonStart == -1 || jsonEnd <= jsonStart) {
+            if (jsonStr == null) {
                 return FoodAnalysisResult(
                     success = false,
                     detectedFoods = emptyList(),
@@ -253,7 +256,6 @@ Be conservative with estimates. Use typical USDA values as reference.
                 )
             }
             
-            val jsonStr = responseText.substring(jsonStart, jsonEnd)
             val parsed = gson.fromJson(jsonStr, GeminiFoodResponse::class.java)
             
             val foods = parsed.foods.map { food ->
@@ -292,6 +294,62 @@ Be conservative with estimates. Use typical USDA values as reference.
                 rawResponse = responseText,
                 errorMessage = "Failed to parse response: ${e.message}"
             )
+        }
+    }
+
+    /**
+     * Adjust macros for a specific food based on a natural language description (e.g., "2 pieces", "half a cup").
+     */
+    suspend fun adjustMacros(
+        foodName: String,
+        originalMacros: DetectedFood,
+        adjustmentRequest: String
+    ): DetectedFood = withContext(Dispatchers.IO) {
+        val adjustmentPrompt = """
+            You are a nutrition expert. Adjust the macros for the following food based on the user's request.
+            
+            FOOD: $foodName
+            ORIGINAL PORTION: ${originalMacros.estimatedPortionSize} (${originalMacros.estimatedPortionGrams}g)
+            ORIGINAL MACROS: ${originalMacros.calories} cal, ${originalMacros.protein}g protein, ${originalMacros.carbs}g carbs, ${originalMacros.fat}g fat
+            
+            USER REQUEST: $adjustmentRequest
+            
+            Respond ONLY with valid JSON in this exact format, no additional text:
+            {
+              "name": "$foodName",
+              "estimatedPortionSize": "new portion description",
+              "estimatedPortionGrams": 0.0,
+              "calories": 0.0,
+              "protein": 0.0,
+              "carbs": 0.0,
+              "fat": 0.0,
+              "confidence": 0.9
+            }
+        """.trimIndent()
+
+        try {
+            val content = Content.builder()
+                .parts(listOf(Part.builder().text(adjustmentPrompt).build()))
+                .build()
+            
+            val config = GenerateContentConfig.builder()
+                .temperature(0.1f)
+                .build()
+            
+            val response = client.models.generateContent("gemini-2.0-flash", content, config)
+            val responseText = response.text() ?: ""
+            
+            val jsonStr = extractJson(responseText)
+            if (jsonStr == null) {
+                Log.e("GeminiService", "Could not extract JSON from adjustMacros response")
+                return@withContext originalMacros
+            }
+            
+            val adjusted = gson.fromJson(jsonStr, DetectedFood::class.java)
+            adjusted
+        } catch (e: Exception) {
+            Log.e("GeminiService", "Error adjusting macros", e)
+            originalMacros // Fallback to original
         }
     }
 }

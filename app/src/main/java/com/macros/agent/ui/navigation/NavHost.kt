@@ -40,9 +40,20 @@ fun MacrosNavHost() {
         bottomBar = {
             NavigationBar {
                 Screen.bottomNavItems.forEach { screen ->
+                    val currentRoute = currentDestination?.route
+                    val isSubRoute = when (screen) {
+                        Screen.Diary -> currentRoute?.startsWith("add_food") == true ||
+                                       currentRoute?.startsWith("food") == true ||
+                                       currentRoute?.startsWith("edit_entry") == true ||
+                                       currentRoute == Routes.PROGRESS_CHART
+                        Screen.Settings -> currentRoute == Routes.GOALS
+                        Screen.Search -> currentRoute == Routes.BARCODE_SCANNER
+                        else -> false
+                    }
+                    
                     val selected = currentDestination?.hierarchy?.any { 
                         it.route == screen.route 
-                    } == true
+                    } == true || isSubRoute
                     
                     NavigationBarItem(
                         icon = {
@@ -54,15 +65,30 @@ fun MacrosNavHost() {
                         label = { Text(screen.title) },
                         selected = selected,
                         onClick = {
-                            navController.navigate(screen.route) {
-                                // Pop up to the start destination to avoid building up a large stack
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                            if (selected) {
+                                // If already in this tab's hierarchy, pop back to the root of the tab
+                                val popped = navController.popBackStack(screen.route, inclusive = false)
+                                if (!popped && currentDestination?.route != screen.route) {
+                                    // If pop failed and we're not already at the root, navigate to the root
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                 }
-                                // Avoid multiple copies of the same destination
-                                launchSingleTop = true
-                                // Restore state when reselecting a previously selected item
-                                restoreState = true
+                            } else {
+                                navController.navigate(screen.route) {
+                                    // Pop up to the start destination to avoid building up a large stack
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    // Avoid multiple copies of the same destination
+                                    launchSingleTop = true
+                                    // Restore state when reselecting a previously selected item
+                                    restoreState = true
+                                }
                             }
                         }
                     )
@@ -100,9 +126,11 @@ fun MacrosNavHost() {
             }
         ) {
             composable(Screen.Diary.route) {
+                val diaryViewModel = hiltViewModel<DiaryViewModel>()
                 DiaryScreen(
                     onNavigateToSearch = { mealType ->
-                        navController.navigate(Routes.addFood(mealType))
+                        val dateString = diaryViewModel.diaryState.value.selectedDate.toString()
+                        navController.navigate(Routes.addFood(mealType, dateString))
                     },
                     onNavigateToEdit = { entryId ->
                         navController.navigate(Routes.editEntry(entryId))
@@ -183,11 +211,16 @@ fun MacrosNavHost() {
                     androidx.navigation.navArgument("mealType") { 
                         type = androidx.navigation.NavType.StringType 
                         nullable = true
+                    },
+                    androidx.navigation.navArgument("date") {
+                        type = androidx.navigation.NavType.StringType
+                        nullable = true
                     }
                 )
             ) { backStackEntry ->
                 val viewModel = hiltViewModel<SearchViewModel>()
                 val mealType = backStackEntry.arguments?.getString("mealType")
+                val date = backStackEntry.arguments?.getString("date")
                 
                 val scannedBarcode = backStackEntry.savedStateHandle.get<String>("scanned_barcode")
                 androidx.compose.runtime.LaunchedEffect(scannedBarcode) {
@@ -199,7 +232,7 @@ fun MacrosNavHost() {
                 
                 SearchScreen(
                     onFoodSelected = { food ->
-                        navController.navigate(Routes.foodDetail(food.fdcId, mealType))
+                        navController.navigate(Routes.foodDetail(food.fdcId, mealType, date))
                     },
                     onNavigateToBarcode = {
                         navController.navigate(Routes.BARCODE_SCANNER)
@@ -214,6 +247,10 @@ fun MacrosNavHost() {
                 arguments = listOf(
                     androidx.navigation.navArgument("fdcId") { type = androidx.navigation.NavType.IntType },
                     androidx.navigation.navArgument("mealType") { 
+                        type = androidx.navigation.NavType.StringType
+                        nullable = true
+                    },
+                    androidx.navigation.navArgument("date") {
                         type = androidx.navigation.NavType.StringType
                         nullable = true
                     }

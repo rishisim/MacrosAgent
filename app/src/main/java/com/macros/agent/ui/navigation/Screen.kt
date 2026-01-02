@@ -66,16 +66,16 @@ sealed class Screen(
  * Routes for nested navigation (not in bottom nav).
  */
 object Routes {
-    const val FOOD_DETAIL = "food/{fdcId}?mealType={mealType}"
-    const val ADD_FOOD = "add_food?mealType={mealType}"
+    const val FOOD_DETAIL = "food/{fdcId}?mealType={mealType}&date={date}"
+    const val ADD_FOOD = "add_food?mealType={mealType}&date={date}"
     const val EDIT_ENTRY = "edit_entry/{entryId}"
     const val BARCODE_SCANNER = "barcode_scanner"
     const val GOALS = "goals"
     const val PROGRESS_CHART = "progress_chart"
     
-    fun foodDetail(fdcId: Int, mealType: String? = null) = 
-        if (mealType != null) "food/$fdcId?mealType=$mealType" else "food/$fdcId"
-    fun addFood(mealType: String) = "add_food?mealType=$mealType"
+    fun foodDetail(fdcId: Int, mealType: String? = null, date: String? = null) = 
+        "food/$fdcId?mealType=${mealType ?: ""}&date=${date ?: ""}"
+    fun addFood(mealType: String, date: String) = "add_food?mealType=$mealType&date=$date"
     fun editEntry(entryId: Long) = "edit_entry/$entryId"
     
     const val EXERCISE = "exercise"

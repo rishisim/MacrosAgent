@@ -16,7 +16,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -40,7 +42,8 @@ data class PhotoUiState(
     val selectedMealType: MealType = MealType.LUNCH,
     val photoUri: String? = null,
     val isAddingToLog: Boolean = false,
-    val userContext: String = ""
+    val userContext: String = "",
+    val analysisId: Long? = null
 )
 
 @HiltViewModel
@@ -69,22 +72,24 @@ class PhotoViewModel @Inject constructor(
             val result = geminiService.analyzeFood(bitmap, userContext)
             
             if (result.success) {
-                // Save analysis to database
-                val analysis = GeminiAnalysis(
-                    photoUri = photoUri ?: "",
-                    rawResponse = result.rawResponse,
-                    detectedFoodsJson = gson.toJson(result.detectedFoods),
-                    totalCalories = result.totalCalories,
-                    totalProtein = result.totalProtein,
-                    totalCarbs = result.totalCarbs,
-                    totalFat = result.totalFat,
-                    confidence = result.overallConfidence
-                )
-                geminiAnalysisDao.insert(analysis)
+                val analysisId = withContext(Dispatchers.IO) {
+                    val analysis = GeminiAnalysis(
+                        photoUri = photoUri ?: "",
+                        rawResponse = result.rawResponse,
+                        detectedFoodsJson = gson.toJson(result.detectedFoods),
+                        totalCalories = result.totalCalories,
+                        totalProtein = result.totalProtein,
+                        totalCarbs = result.totalCarbs,
+                        totalFat = result.totalFat,
+                        confidence = result.overallConfidence
+                    )
+                    geminiAnalysisDao.insert(analysis)
+                }
                 
                 _uiState.value = _uiState.value.copy(
                     analysisState = AnalysisState.Success(result),
-                    detectedFoods = result.detectedFoods
+                    detectedFoods = result.detectedFoods,
+                    analysisId = analysisId
                 )
             } else {
                 _uiState.value = _uiState.value.copy(
@@ -149,11 +154,14 @@ class PhotoViewModel @Inject constructor(
                     carbs = food.carbs,
                     fat = food.fat,
                     photoUri = _uiState.value.photoUri,
-                    isFromGemini = true
+                    isFromGemini = true,
+                    geminiAnalysisId = _uiState.value.analysisId
                 )
             }
             
-            diaryRepository.addEntries(entries)
+            withContext(Dispatchers.IO) {
+                diaryRepository.addEntries(entries)
+            }
             
             // Reset state
             _uiState.value = PhotoUiState()

@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Remove
@@ -216,27 +217,21 @@ fun FoodDetailScreen(
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(
-                                onClick = { 
-                                    if (uiState.servingQuantity > 0.5f) {
-                                        viewModel.updateQuantity(uiState.servingQuantity - 0.5f)
-                                    }
-                                }
+                                onClick = { viewModel.incrementQuantity(-0.5f) }
                             ) {
                                 Icon(Icons.Default.Remove, "Decrease")
                             }
                             
                             OutlinedTextField(
-                                value = uiState.servingQuantity.toString(),
-                                onValueChange = { 
-                                    it.toFloatOrNull()?.let { qty -> viewModel.updateQuantity(qty) } 
-                                },
+                                value = uiState.servingQuantityString,
+                                onValueChange = { viewModel.updateQuantity(it) },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                 modifier = Modifier.width(80.dp),
                                 textStyle = androidx.compose.ui.text.TextStyle(textAlign = TextAlign.Center),
                                 singleLine = true
                             )
                             
-                            IconButton(onClick = { viewModel.updateQuantity(uiState.servingQuantity + 0.5f) }) {
+                            IconButton(onClick = { viewModel.incrementQuantity(0.5f) }) {
                                 Icon(Icons.Default.Add, "Increase")
                             }
                         }
@@ -248,7 +243,7 @@ fun FoodDetailScreen(
                             style = MaterialTheme.typography.labelMedium
                         )
                         var expanded by remember { mutableStateOf(false) }
-                        val units = listOf("g", "oz", "cup", "ml", "tbsp", "tsp", "piece")
+                        val units = listOf("g", "oz", "lbs", "cup", "ml", "tbsp", "tsp", "piece")
                         
                         ExposedDropdownMenuBox(
                             expanded = expanded,
@@ -279,7 +274,59 @@ fun FoodDetailScreen(
                     }
                 }
 
-                // Meal Selector
+                // AI Adjustment
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, "AI", tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "AI Portion Adjuster",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        
+                        var aiRequest by remember { mutableStateOf("") }
+                        OutlinedTextField(
+                            value = aiRequest,
+                            onValueChange = { aiRequest = it },
+                            placeholder = { Text("e.g., '2.5 pieces', 'half a pizza'", style = MaterialTheme.typography.bodySmall) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            trailingIcon = {
+                                if (uiState.isAnalyzing) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                } else {
+                                    IconButton(
+                                        onClick = { 
+                                            if (aiRequest.isNotBlank()) {
+                                                viewModel.adjustWithAI(aiRequest)
+                                            }
+                                        },
+                                        enabled = aiRequest.isNotBlank()
+                                    ) {
+                                        Icon(Icons.Default.Check, "Apply")
+                                    }
+                                }
+                            }
+                        )
+                        Text(
+                            text = "Describe the portion and Gemini will calculate the new macros.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 Text(
                     text = "Meal",
                     style = MaterialTheme.typography.titleMedium,

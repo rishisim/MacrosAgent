@@ -21,7 +21,7 @@ import com.macros.agent.data.local.entity.*
         UserMeal::class,
         UserMealItem::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

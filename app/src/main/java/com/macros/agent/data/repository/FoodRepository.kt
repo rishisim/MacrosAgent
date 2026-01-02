@@ -98,19 +98,22 @@ class FoodRepository @Inject constructor(
             
             // Fetch from API
             val response = usdaApiService.getFoodDetail(fdcId, apiKey)
+            val servingSize = response.servingSize ?: 100f
+            val ratio = if (servingSize > 0) 100f / servingSize else 1f
+            
             val food = Food(
                 fdcId = response.fdcId,
                 description = response.description,
                 brandOwner = response.brandOwner,
                 brandName = response.brandName,
-                calories = response.labelNutrients?.calories?.value ?: 0f,
-                protein = response.labelNutrients?.protein?.value ?: 0f,
-                carbs = response.labelNutrients?.carbohydrates?.value ?: 0f,
-                fat = response.labelNutrients?.fat?.value ?: 0f,
-                fiber = response.labelNutrients?.fiber?.value ?: 0f,
-                sugar = response.labelNutrients?.sugars?.value ?: 0f,
-                sodium = response.labelNutrients?.sodium?.value ?: 0f,
-                servingSize = response.servingSize ?: 100f,
+                calories = (response.labelNutrients?.calories?.value ?: 0f) * ratio,
+                protein = (response.labelNutrients?.protein?.value ?: 0f) * ratio,
+                carbs = (response.labelNutrients?.carbohydrates?.value ?: 0f) * ratio,
+                fat = (response.labelNutrients?.fat?.value ?: 0f) * ratio,
+                fiber = (response.labelNutrients?.fiber?.value ?: 0f) * ratio,
+                sugar = (response.labelNutrients?.sugars?.value ?: 0f) * ratio,
+                sodium = (response.labelNutrients?.sodium?.value ?: 0f) * ratio,
+                servingSize = servingSize,
                 servingUnit = response.servingSizeUnit ?: "g",
                 category = response.foodCategory,
                 ingredients = response.ingredients,

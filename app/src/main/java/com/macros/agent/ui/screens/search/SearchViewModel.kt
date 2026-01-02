@@ -1,5 +1,6 @@
 package com.macros.agent.ui.screens.search
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macros.agent.data.local.dao.UserMealWithItems
@@ -40,7 +41,8 @@ data class SearchUiState(
     val recentFoods: List<Food> = emptyList(),
     val favorites: List<Food> = emptyList(),
     val customMeals: List<UserMealWithItems> = emptyList(),
-    val showRecentsAndFavorites: Boolean = true
+    val showRecentsAndFavorites: Boolean = true,
+    val date: String? = null
 )
 
 @OptIn(FlowPreview::class)
@@ -48,8 +50,11 @@ data class SearchUiState(
 class SearchViewModel @Inject constructor(
     private val foodRepository: FoodRepository,
     private val userMealRepository: UserMealRepository,
-    private val diaryRepository: DiaryRepository
+    private val diaryRepository: DiaryRepository,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+    
+    private val dateArg: String? = savedStateHandle["date"]
     
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
@@ -97,7 +102,10 @@ class SearchViewModel @Inject constructor(
 
         viewModelScope.launch {
             userMealRepository.getAllMeals().collect { meals ->
-                _uiState.value = _uiState.value.copy(customMeals = meals)
+                _uiState.value = _uiState.value.copy(
+                    customMeals = meals,
+                    date = dateArg
+                )
             }
         }
     }
@@ -177,11 +185,12 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    fun addMealToLog(mealWithItems: UserMealWithItems, mealType: MealType, date: java.time.LocalDate = java.time.LocalDate.now()) {
+    fun addMealToLog(mealWithItems: UserMealWithItems, mealType: MealType) {
+        val dateString = _uiState.value.date ?: diaryRepository.formatDate(java.time.LocalDate.now())
         viewModelScope.launch {
             val entries = mealWithItems.items.map { item ->
                 DiaryEntry(
-                    date = diaryRepository.formatDate(date),
+                    date = dateString,
                     mealType = mealType,
                     foodName = item.foodName,
                     servingSize = item.servingSize,
